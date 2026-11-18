@@ -1,5 +1,8 @@
 import { jsonb, withService, type Tx } from '../server/db';
 import { reassignUntouchedLeads } from '../server/assignment/reassign';
+import {
+  sendOverdueAlerts, sendOverdueDigests, sendTaskReminders, sendUntouchedLeadAlerts,
+} from '../server/followups/alerts';
 
 export interface ScheduledJob {
   key: string;
@@ -10,8 +13,6 @@ export interface ScheduledJob {
 /**
  * Scheduled jobs. Each runs at most once per window (see scheduler_runs), and
  * each is written so that running it twice changes nothing the second time.
- * Weeks 6-8 add: task reminders (15 min before due), overdue digest, untouched
- * new-lead alerts.
  */
 export const SCHEDULE: ScheduledJob[] = [
   {
@@ -19,6 +20,10 @@ export const SCHEDULE: ScheduledJob[] = [
     everyMinutes: 1,
     run: (tx) => reassignUntouchedLeads(tx),
   },
+  { key: 'tasks.reminders', everyMinutes: 1, run: (tx) => sendTaskReminders(tx) },
+  { key: 'tasks.overdue_alerts', everyMinutes: 5, run: (tx) => sendOverdueAlerts(tx) },
+  { key: 'leads.untouched_alerts', everyMinutes: 1, run: (tx) => sendUntouchedLeadAlerts(tx) },
+  { key: 'digest.overdue', everyMinutes: 15, run: (tx) => sendOverdueDigests(tx) },
   {
     key: 'jobs.recover_stale',
     everyMinutes: 5,

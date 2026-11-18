@@ -111,7 +111,7 @@ describe('job queue', () => {
     const [after] = await admin`select owner_id, last_enquiry_at from public.contacts where id = ${c.id}`;
     expect(after.owner_id).not.toBeNull();
     expect(after.last_enquiry_at).not.toBeNull();
-    const [job] = await admin`select status, attempts from public.jobs`;
+    const [job] = await admin`select status, attempts from public.jobs where name = 'contact.created'`;
     expect(job).toMatchObject({ status: 'done', attempts: 1 });
 
     // Delivered twice (at-least-once queue): no second assignment.
