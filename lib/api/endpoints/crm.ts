@@ -72,7 +72,7 @@ export interface QuickAddInput {
 
 export interface QuickAddResult {
   contact_id: string;
-  status: 'created' | 'reenquiry';
+  status: 'created' | 'reenquiry' | 'queued';
   owner_id: string | null;
 }
 

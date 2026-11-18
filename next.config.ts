@@ -1,7 +1,17 @@
 import type {NextConfig} from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
+import withSerwistInit from '@serwist/next';
 
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+
+// PWA service worker (app/sw.ts → public/sw.js). Registered by components/providers/PwaRegister
+// only when API mocks are off, because MSW needs the same scope.
+const withSerwist = withSerwistInit({
+  swSrc: 'app/sw.ts',
+  swDest: 'public/sw.js',
+  register: false,
+  disable: process.env.NODE_ENV === 'development',
+});
 
 const hasDb = Boolean(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL);
 
@@ -42,4 +52,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withNextIntl(nextConfig);
+export default withSerwist(withNextIntl(nextConfig));

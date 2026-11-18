@@ -7,6 +7,7 @@ import { Eye, Lock, WifiOff } from 'lucide-react';
 import { useAppState } from '@/lib/app-state';
 import { useSession } from '@/lib/auth/SessionProvider';
 import { usePermissions } from '@/lib/permissions';
+import { usePendingCount } from '@/lib/offline-queue';
 
 /** Site-wide, non-dismissable (brief §8.11). */
 export function ReadOnlyBanner() {
@@ -50,12 +51,14 @@ export function ImpersonationBar() {
 
 export function OfflineBanner() {
   const t = useTranslations('shell');
+  const o = useTranslations('offline');
   const { offline } = useAppState();
-  if (!offline) return null;
+  const pending = usePendingCount();
+  if (!offline && !pending) return null;
   return (
     <div role="status" className="flex items-center gap-2 bg-gray-800 px-4 py-2 text-sm text-white">
       <WifiOff className="size-4 shrink-0" aria-hidden="true" />
-      {t('offlineBanner')}
+      {pending ? (offline ? o('pending', { count: pending }) : o('pendingOnline', { count: pending })) : t('offlineBanner')}
     </div>
   );
 }

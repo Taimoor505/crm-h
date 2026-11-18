@@ -74,6 +74,7 @@ function QuickAddLead({ prefill }: { prefill: { phone?: string; name?: string } 
   const t = useTranslations('quickAdd');
   const c = useTranslations('common');
   const e = useTranslations('errors');
+  const o = useTranslations('offline');
   const s = useWorkspaceSettings();
   const router = useRouter();
   const { can } = usePermissions();
@@ -118,6 +119,10 @@ function QuickAddLead({ prefill }: { prefill: { phone?: string; name?: string } 
     });
     countUsefulAction();
     closeQuickAdd();
+    if (r.status === 'queued') {
+      toast.info(o('queuedLead'));
+      return;
+    }
     toast.success(r.status === 'reenquiry' ? t('reenquiry') : t('added'), {
       action: { label: t('open'), onClick: () => router.push(`/contacts/${r.contact_id}`) },
     });

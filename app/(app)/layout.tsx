@@ -5,6 +5,8 @@ import { QuickAddLeadHost } from '@/components/crm/QuickAddLead';
 import { CallOutcomeHost } from '@/components/crm/CallOutcomeSheet';
 import { DevSwitcher } from '@/components/dev/DevSwitcher';
 import { PushPrompt } from '@/components/crm/PushPrompt';
+import { OfflineSync } from '@/components/providers/OfflineSync';
+import { PwaRegister } from '@/components/providers/PwaRegister';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,6 +17,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <CallOutcomeHost />
         <PushPrompt />
         <DevSwitcher />
+        <OfflineSync />
+        <PwaRegister />
       </AppGate>
     </AppProviders>
   );

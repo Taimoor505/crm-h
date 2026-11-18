@@ -5,6 +5,21 @@ import * as crm from '@/lib/api/endpoints/crm';
 import type { ContactFilters, ContactPatch, DealInput, FieldInput, QuickAddInput } from '@/lib/api/endpoints/crm';
 import type { Activity, CallOutcome, Contact, Deal, Page, ReasonPresets, StageKind, TeamMember, WorkspaceRole } from '@/lib/api/types';
 import { useSession, useWorkspaceId } from '@/lib/auth/SessionProvider';
+import { isApiError } from '@/lib/api/client';
+import { enqueue } from '@/lib/offline-queue';
+
+/** Offline: queue the write (brief §10) instead of failing. */
+async function orQueue<T>(ws: string, run: () => Promise<T>, queue: () => Promise<void>, queued: T): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    if (isApiError(e) && e.code === 'network_error' && ws) {
+      await queue();
+      return queued;
+    }
+    throw e;
+  }
+}
 import { qk } from './keys';
 
 // ------------------------------------------------------------- contacts
@@ -51,7 +66,8 @@ export function useQuickAdd() {
   const ws = useWorkspaceId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: QuickAddInput) => crm.quickAdd(input),
+    mutationFn: (input: QuickAddInput) =>
+      orQueue(ws, () => crm.quickAdd(input), () => enqueue({ kind: 'quick_add', workspaceId: ws, payload: input }), { contact_id: '', status: 'queued' as const, owner_id: null }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.contacts(ws) });
       qc.invalidateQueries({ queryKey: [ws, 'home'] });
@@ -118,7 +134,8 @@ export function useAddNote(contactId: string) {
   const { session } = useSession();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) => crm.addNote(contactId, body),
+    mutationFn: (body: string) =>
+      orQueue<Activity | null>(ws, () => crm.addNote(contactId, body), () => enqueue({ kind: 'note', workspaceId: ws, payload: { contactId, body } }), null),
     onMutate: async (body) => {
       await qc.cancelQueries({ queryKey: qk.timeline(ws, contactId) });
       const prev = qc.getQueryData(qk.timeline(ws, contactId));

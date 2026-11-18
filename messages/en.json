@@ -996,5 +996,12 @@
     "workbenchHint": "Test API endpoints, RLS and templates against the backend.",
     "partners": "Partners",
     "payments": "Payments to confirm"
+  },
+  "offline": {
+    "pending": "Offline · {count} pending",
+    "pendingOnline": "{count} pending · syncing",
+    "synced": "{count, plural, one {Synced # saved change} other {Synced # saved changes}}",
+    "queuedLead": "You're offline. The lead is saved and will sync when you reconnect.",
+    "queuedNote": "You're offline. The note will sync when you reconnect."
   }
 }

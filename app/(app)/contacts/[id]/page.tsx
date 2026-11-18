@@ -507,6 +507,7 @@ function DealsTab({ deals, loading, pipelines, onAdd }: { deals: Deal[]; loading
 
 function NoteSheet({ contactId, onClose }: { contactId: string; onClose: () => void }) {
   const t = useTranslations('contact');
+  const o = useTranslations('offline');
   const c = useTranslations('common');
   const add = useAddNote(contactId);
   const [body, setBody] = useState('');
@@ -520,7 +521,7 @@ function NoteSheet({ contactId, onClose }: { contactId: string; onClose: () => v
           className="h-11 w-full"
           disabled={!body.trim()}
           onClick={() => {
-            add.mutate(body.trim(), { onSuccess: () => toast.success(t('noteSaved')) });
+            add.mutate(body.trim(), { onSuccess: (a) => (a ? toast.success(t('noteSaved')) : toast.info(o('queuedNote'))) });
             countUsefulAction();
             onClose();
           }}
