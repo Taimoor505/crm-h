@@ -7,12 +7,15 @@ info:
     OpenAPI file once Taimoor's lands.
 
     **Auth:** `Authorization: Bearer <Supabase access token>` and
-    `X-Workspace-Id: <uuid>` on every endpoint except `/hooks/*`.
+    `X-Workspace-Id: <uuid>` on every endpoint except `/hooks/*` (public,
+    signed), `/billing/*` (`X-Partner-Id` for partner admins, or
+    `X-Workspace-Id` for a direct customer's owner) and `/admin/*`
+    (super-admins).
     Agents only ever see their own leads and tasks (enforced by RLS).
 
     **Errors:** `{ "error": { "code", "message", "details"? } }`.
     Common codes: `unauthorized` 401, `not_a_member` / `forbidden` /
-    `workspace_read_only` 403, `not_found` 404, `conflict` 409,
+    `workspace_read_only` / `workspace_suspended` 403, `not_found` 404, `conflict` 409,
     `validation_failed` 422 (details: [{path, message}]), `rate_limited` 429.
 
     **Lists** are cursor-paginated: pass `next_cursor` back as `cursor`.
@@ -27,7 +30,10 @@ tags:
   - name: Tasks
   - name: Notifications
   - name: Home
+  - name: Automations
+  - name: Reports
   - name: Billing
+  - name: Admin
 
 paths:
   /lead-sources:
@@ -65,7 +71,9 @@ paths:
                   description: Stored as contacts.source and used by "by source" assignment. Defaults per type (website, webhook, facebook, manual).
                 mapping: { $ref: '#/components/schemas/LeadMapping' }
                 settings: { $ref: '#/components/schemas/LeadSourceSettings' }
+                meta: { $ref: '#/components/schemas/MetaConnection' }
       responses:
+        '422': { description: 'validation_failed, or meta_subscribe_failed (Meta rejected the page token)' }
         '201':
           description: Created
           content:
@@ -83,6 +91,7 @@ paths:
     patch:
       tags: [Lead capture]
       summary: Update or rotate a lead source (managers)
+      description: '`settings` is merged into the stored settings (server-managed keys such as the Meta page stay).'
       parameters: [{ $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/Id' }]
       requestBody:
         content:
@@ -96,8 +105,11 @@ paths:
                 settings: { $ref: '#/components/schemas/LeadSourceSettings' }
                 is_active: { type: boolean }
                 rotate_secret: { type: boolean, enum: [true], description: Webhook sources only. Returns the new `secret`. }
+                meta:
+                  description: meta_leadgen only. Refresh an expired page token and/or change the forms.
+                  allOf: [{ $ref: '#/components/schemas/MetaConnection' }]
       responses:
-        '200': { description: Updated source (with `secret` if rotated) }
+        '200': { description: 'Updated source (with `secret` if rotated)' }
         '404': { $ref: '#/components/responses/Error' }
 
   /hooks/leads/{key}:
@@ -142,18 +154,18 @@ paths:
                   ok: { type: boolean }
                   status: { type: string, enum: [created, reenquiry, accepted] }
                   contact_id: { type: [string, 'null'], format: uuid }
-        '303': { description: Redirect for plain HTML form posts }
-        '401': { description: Bad or missing signature }
-        '403': { description: Origin not allowed }
-        '404': { description: Unknown or inactive source }
+        '303': { description: 'Redirect for plain HTML form posts' }
+        '401': { description: 'Bad or missing signature' }
+        '403': { description: 'Origin not allowed' }
+        '404': { description: 'Unknown or inactive source' }
         '422': { description: 'No usable phone or email (codes: invalid_phone, missing_contact_details)' }
-        '429': { description: Rate limited }
+        '429': { description: 'Rate limited' }
     options:
       tags: [Lead capture]
       summary: CORS preflight for website forms
       security: []
       parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
-      responses: { '204': { description: CORS headers when the Origin is allowed } }
+      responses: { '204': { description: 'CORS headers when the Origin is allowed' } }
 
   /leads/quick-add:
     post:
@@ -180,7 +192,7 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/QuickAddResult' }
         '200': { $ref: '#/components/responses/QuickAddResult' }
-        '403': { description: An agent tried to assign to someone else }
+        '403': { description: 'An agent tried to assign to someone else' }
 
   /assignment-rules:
     get:
@@ -205,7 +217,7 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/AssignmentRulesInput' }
       responses:
-        '200': { description: Saved rules (same shape as GET) }
+        '200': { description: 'Saved rules (same shape as GET)' }
         '422': { description: 'validation_failed, or invalid_members (details.user_ids)' }
 
   /availability:
@@ -225,8 +237,8 @@ paths:
                 available: { type: boolean }
                 user_id: { type: string, format: uuid, description: Managers only; defaults to the caller }
       responses:
-        '200': { description: OK }
-        '403': { description: Agent tried to change someone else }
+        '200': { description: 'OK' }
+        '403': { description: 'Agent tried to change someone else' }
 
   /contacts/{id}/assign:
     post:
@@ -305,7 +317,7 @@ paths:
                 due_at: { type: string, format: date-time }
       responses:
         '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Task' } } } } } }
-        '404': { description: contact_not_found (or not visible to the caller) }
+        '404': { description: 'contact_not_found (or not visible to the caller)' }
 
   /tasks/{id}:
     patch:
@@ -325,8 +337,8 @@ paths:
                 assigned_to: { type: string, format: uuid }
                 status: { type: string, enum: [open, cancelled] }
       responses:
-        '200': { description: Updated task }
-        '409': { description: Completed tasks can't be reopened }
+        '200': { description: 'Updated task' }
+        '409': { description: 'Completed tasks can''t be reopened' }
 
   /tasks/{id}/complete:
     post:
@@ -356,7 +368,7 @@ paths:
                     properties:
                       task: { $ref: '#/components/schemas/Task' }
                       next: { oneOf: [{ $ref: '#/components/schemas/Task' }, { type: 'null' }] }
-        '409': { description: task_not_open }
+        '409': { description: 'task_not_open' }
 
   /notifications:
     get:
@@ -415,7 +427,450 @@ paths:
       summary: Plans and prices (per client workspace, PKR)
       parameters: [{ $ref: '#/components/parameters/Workspace' }]
       responses:
-        '200': { description: OK }
+        '200': { description: 'OK' }
+
+  /hooks/meta/leadgen:
+    get:
+      tags: [Lead capture]
+      summary: Meta webhook verification (public)
+      security: []
+      parameters:
+        - { name: hub.mode, in: query, schema: { type: string, enum: [subscribe] } }
+        - { name: hub.verify_token, in: query, schema: { type: string }, description: Must equal META_VERIFY_TOKEN }
+        - { name: hub.challenge, in: query, schema: { type: string } }
+      responses:
+        '200': { description: 'The challenge, as text/plain' }
+        '403': { description: 'Wrong verify token' }
+    post:
+      tags: [Lead capture]
+      summary: Meta lead ads deliveries (public, signed)
+      security: []
+      description: |
+        One URL for the whole platform (Meta app → Webhooks → Page → `leadgen`). Signed with the app
+        secret (`X-Hub-Signature-256`). Each `leadgen` change is matched to the active `meta_leadgen`
+        source for that page (a source limited to the form wins over a page-wide one), stored in
+        `lead_events`, and fetched from the Graph API by the worker, then ingested like any lead.
+        Repeated deliveries of the same lead are ignored.
+      parameters:
+        - { name: X-Hub-Signature-256, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example: { object: page, entry: [{ id: '104857600001', changes: [{ field: leadgen, value: { leadgen_id: '900001', page_id: '104857600001', form_id: '700000000001' } }] }] }
+      responses:
+        '200':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  queued: { type: integer }
+                  duplicate: { type: integer }
+                  no_source: { type: integer }
+        '401': { description: 'Bad signature' }
+
+  /notification-settings:
+    get:
+      tags: [Notifications]
+      summary: The caller's channels per event type
+      description: In-app is always on. Defaults send WhatsApp only for urgent items. Quiet hours (23:00-08:00 workspace time) hold push and WhatsApp until 08:00.
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/NotificationSettings' } }
+    put:
+      tags: [Notifications]
+      summary: Update the caller's settings (partial)
+      description: Allowed even when the workspace is read-only.
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                events:
+                  type: array
+                  items:
+                    type: object
+                    required: [type]
+                    properties:
+                      type: { $ref: '#/components/schemas/NotificationType' }
+                      push: { type: boolean }
+                      whatsapp: { type: boolean }
+                quiet_hours: { type: boolean }
+                whatsapp_number: { type: [string, 'null'], description: For agent alerts; null = profile phone }
+      responses:
+        '200': { description: 'Updated settings (same shape as GET)' }
+        '422': { description: 'invalid_phone' }
+
+  /push-subscriptions:
+    post:
+      tags: [Notifications]
+      summary: Register this browser for web push
+      description: Send `registration.pushManager.subscribe(...).toJSON()`. Use `push.vapid_public_key` from GET /notification-settings as the applicationServerKey. The service worker should `importScripts('/push-sw.js')`.
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint: { type: string, format: uri }
+                keys: { type: object, required: [p256dh, auth], properties: { p256dh: { type: string }, auth: { type: string } } }
+      responses:
+        '201': { description: '{ data: { id } }' }
+    delete:
+      tags: [Notifications]
+      summary: Forget this browser (call on logout)
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [endpoint], properties: { endpoint: { type: string, format: uri } } }
+      responses:
+        '200': { description: '{ data: { removed } }' }
+
+  /automations:
+    get:
+      tags: [Automations]
+      summary: The six preset rules with state, settings and recent runs
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { type: array, items: { $ref: '#/components/schemas/Automation' } } }
+
+  /automations/{key}:
+    patch:
+      tags: [Automations]
+      summary: Switch a rule on/off and/or change its settings (managers)
+      description: Settings are merged and validated against the rule's `settings_schema`.
+      parameters:
+        - $ref: '#/components/parameters/Workspace'
+        - { name: key, in: path, required: true, schema: { $ref: '#/components/schemas/AutomationKey' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                settings: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: '{ data: { key, enabled, settings } }' }
+        '404': { description: 'Unknown automation' }
+        '422': { description: 'validation_failed, or incomplete_settings (e.g. welcome message without a template)' }
+
+  /automation-runs:
+    get:
+      tags: [Automations]
+      summary: Run log, newest first (managers) — "why did this message go out?"
+      parameters:
+        - $ref: '#/components/parameters/Workspace'
+        - { name: automation_key, in: query, schema: { $ref: '#/components/schemas/AutomationKey' } }
+        - { name: status, in: query, schema: { type: string, enum: [success, skipped, failed] } }
+        - { name: contact_id, in: query, schema: { type: string, format: uuid } }
+        - { name: deal_id, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        automation_key: { $ref: '#/components/schemas/AutomationKey' }
+                        trigger_event: { type: string, example: lead.received }
+                        contact_id: { type: [string, 'null'] }
+                        contact_name: { type: [string, 'null'] }
+                        deal_id: { type: [string, 'null'] }
+                        status: { type: string, enum: [success, skipped, failed] }
+                        result: { type: object, description: 'e.g. { task_id }, { message_id }, { reason }' }
+                        error: { type: [string, 'null'] }
+                        created_at: { type: string, format: date-time }
+                  next_cursor: { type: [string, 'null'] }
+
+  /reports/sources:
+    get:
+      tags: [Reports]
+      summary: Leads by source and by day (new + re-enquiries)
+      parameters: &reportParams
+        - $ref: '#/components/parameters/Workspace'
+        - { name: from, in: query, schema: { type: string, format: date }, description: 'Workspace-local date, inclusive; default 29 days before `to`' }
+        - { name: to, in: query, schema: { type: string, format: date }, description: 'Workspace-local date, inclusive; default today' }
+        - { name: pipeline_id, in: query, schema: { type: string, format: uuid } }
+        - { name: source, in: query, schema: { type: string } }
+        - { name: agent_id, in: query, schema: { type: string, format: uuid }, description: Ignored for agents (always themselves) }
+      responses:
+        '200': { description: '{ data: <report>, filters }' }
+        '422': { description: 'Invalid filters' }
+
+  /reports/speed-to-lead:
+    get:
+      tags: [Reports]
+      summary: Median / p90 time from lead creation to first response, per agent
+      parameters: *reportParams
+      responses:
+        '200': { description: '{ data: <report>, filters }' }
+        '422': { description: 'Invalid filters' }
+
+  /reports/funnel:
+    get:
+      tags: [Reports]
+      summary: 'Funnel for one pipeline (default: first) over deals created in range, with win rate'
+      parameters: *reportParams
+      responses:
+        '200': { description: '{ data: <report>, filters }' }
+        '422': { description: 'Invalid filters' }
+
+  /reports/agents:
+    get:
+      tags: [Reports]
+      summary: 'Per agent: assigned, contacted, follow-ups done, overdue now, deals won'
+      parameters: *reportParams
+      responses:
+        '200': { description: '{ data: <report>, filters }' }
+        '422': { description: 'Invalid filters' }
+
+  /reports/won-value:
+    get:
+      tags: [Reports]
+      summary: Won deal value (PKR) by month
+      parameters: *reportParams
+      responses:
+        '200': { description: '{ data: <report>, filters }' }
+        '422': { description: 'Invalid filters' }
+
+  /reports/lost-reasons:
+    get:
+      tags: [Reports]
+      summary: Lost deals by reason, count and value
+      parameters: *reportParams
+      responses:
+        '200': { description: '{ data: <report>, filters }' }
+        '422': { description: 'Invalid filters' }
+
+  /billing/subscription:
+    get:
+      tags: [Billing]
+      summary: Current subscription, trial, pending plan change, workspaces and amount due
+      security: [{ bearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/Partner' }, { $ref: '#/components/parameters/DirectWorkspace' }]
+      responses:
+        '200': { description: '{ data: { subscription, plan, pending_plan, pending_plan_effective, trial, workspaces, outstanding_pkr, overdue_invoices } }' }
+        '403': { description: 'not_partner_admin, forbidden (not the owner), billed_by_partner' }
+    post:
+      tags: [Billing]
+      summary: Start a subscription, or change plan
+      description: |
+        No subscription yet: starts one. With an `identity` (NTN, CNIC or owner phone) never used
+        before, the first month is free for up to 5 workspaces (extras billed); otherwise the
+        first invoice is issued now. Existing subscription: plan change, applied at the end of the
+        paid period (immediately during the trial). An account archived for non-payment gets
+        `409 pay_outstanding`.
+      parameters: [{ $ref: '#/components/parameters/Partner' }, { $ref: '#/components/parameters/DirectWorkspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id]
+              properties:
+                plan_id: { type: string, enum: [commission, monthly, quarterly, annual] }
+                identity: { type: string, example: '1234567-8' }
+      responses:
+        '201': { description: 'Started: { data, trial, invoice_id }' }
+        '200': { description: 'Plan changed: { data, changed: true }' }
+        '409': { description: 'pay_outstanding, subscription_inactive' }
+
+  /billing/invoices:
+    get:
+      tags: [Billing]
+      summary: Latest 36 invoices with lines and payments
+      parameters: [{ $ref: '#/components/parameters/Partner' }, { $ref: '#/components/parameters/DirectWorkspace' }]
+      responses:
+        '200': { description: '{ data: [{ id, number, period_start, issue_date, due_date, status, total_pkr, paid_pkr, lines[], payments[] }] }' }
+
+  /billing/payments:
+    get:
+      tags: [Billing]
+      summary: Payments reported by this account
+      parameters: [{ $ref: '#/components/parameters/Partner' }, { $ref: '#/components/parameters/DirectWorkspace' }]
+      responses:
+        '200': { description: 'OK' }
+    post:
+      tags: [Billing]
+      summary: Report a payment with the transfer screenshot
+      description: A super-admin confirms it; once confirmed payments cover the invoice it is paid and access is restored.
+      parameters: [{ $ref: '#/components/parameters/Partner' }, { $ref: '#/components/parameters/DirectWorkspace' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [invoice_id, amount_pkr, method, proof]
+              properties:
+                invoice_id: { type: string, format: uuid }
+                amount_pkr: { type: number }
+                method: { type: string, enum: [bank_transfer, jazzcash, easypaisa, card] }
+                reference: { type: string }
+                proof: { type: string, format: binary, description: 'JPG, PNG, WebP, HEIC or PDF, up to 5 MB' }
+      responses:
+        '201': { description: 'Pending payment' }
+        '409': { description: 'invoice_closed' }
+        '422': { description: 'proof_required, invalid_proof' }
+
+  /billing/commission-statement:
+    get:
+      tags: [Billing]
+      summary: Commission plan statement for a month (default last month)
+      parameters:
+        - $ref: '#/components/parameters/Partner'
+        - { name: month, in: query, schema: { type: string, pattern: '^\d{4}-\d{2}$' } }
+      responses:
+        '200': { description: '{ data: { month, applies, rate, monthly_minimum_pkr, workspaces: [{ workspace_id, workspace_name, amount_collected_pkr, commission_pkr, floor_applied, status }], totals } }' }
+
+  /billing/collections:
+    put:
+      tags: [Billing]
+      summary: Report what was collected from each client in a month (commission plan)
+      description: Allowed for past or current months until that month is invoiced.
+      parameters: [{ $ref: '#/components/parameters/Partner' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [month, items]
+              properties:
+                month: { type: string, example: '2026-11' }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [workspace_id, amount_collected_pkr]
+                    properties:
+                      workspace_id: { type: string, format: uuid }
+                      amount_collected_pkr: { type: number, minimum: 0 }
+      responses:
+        '200': { description: '{ data: { month, reported } }' }
+        '409': { description: 'not_commission_plan, already_invoiced' }
+        '422': { description: 'future_month, invalid_workspaces' }
+
+  /admin/partners:
+    get:
+      tags: [Admin]
+      summary: All partners with subscriptions, workspaces, outstanding balance (super-admins)
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [trialing, active, read_only, archived, suspended, cancelled, none] } }
+        - { name: q, in: query, schema: { type: string }, description: Name contains }
+      responses:
+        '200': { description: 'OK' }
+        '403': { description: 'not_platform_admin' }
+
+  /admin/partners/{id}/suspend:
+    post:
+      tags: [Admin]
+      summary: Suspend or lift a partner (all its workspaces; reads blocked too)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [suspended], properties: { suspended: { type: boolean }, reason: { type: string } } }
+      responses:
+        '200': { description: '{ data: { partner_id, suspended, workspaces } }' }
+        '422': { description: 'house_partner (use /admin/workspaces/{id}/suspend)' }
+
+  /admin/workspaces/{id}/suspend:
+    post:
+      tags: [Admin]
+      summary: Suspend or lift one workspace (e.g. a direct customer)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [suspended], properties: { suspended: { type: boolean }, reason: { type: string } } }
+      responses:
+        '200': { description: '{ data: { workspace_id, suspended, changed } }' }
+
+  /admin/payments:
+    get:
+      tags: [Admin]
+      summary: Payment confirmation queue with 15-minute proof download links
+      parameters: [{ name: status, in: query, schema: { type: string, enum: [pending, confirmed, rejected], default: pending } }]
+      responses:
+        '200': { description: 'OK' }
+
+  /admin/payments/{id}/confirm:
+    post:
+      tags: [Admin]
+      summary: Confirm (or reject with approve=false) a payment
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { approve: { type: boolean, default: true }, notes: { type: string } } }
+      responses:
+        '200': { description: '{ data: { payment_id, status, invoice_paid, access_restored } }' }
+        '409': { description: 'already_reviewed' }
+
+  /admin/trials/{id}/extend:
+    post:
+      tags: [Admin]
+      summary: Add days to a subscription's free trial (id = subscription id)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [days], properties: { days: { type: integer, minimum: 1, maximum: 90 } } }
+      responses:
+        '200': { description: '{ data: { subscription_id, trial_ends_at } }' }
+        '409': { description: 'not_trialing' }
+
+  /admin/billing/run:
+    post:
+      tags: [Admin]
+      summary: Run the monthly billing now (safe to repeat), then the read-only/archive rules
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { month: { type: string, example: '2026-12' } } }
+      responses:
+        '200': { description: '{ data: { month, invoices, nothing_due, failed, total_pkr, enforcement } }' }
 
 components:
   securitySchemes:
@@ -425,6 +880,8 @@ components:
     Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
     Cursor: { name: cursor, in: query, schema: { type: string } }
+    Partner: { name: X-Partner-Id, in: header, schema: { type: string, format: uuid }, description: 'Partner admins: bill all of the partner''s client workspaces' }
+    DirectWorkspace: { name: X-Workspace-Id, in: header, schema: { type: string, format: uuid }, description: 'Direct customers (house partner): the owner bills their own workspace' }
   responses:
     Error:
       description: Error
@@ -461,6 +918,52 @@ components:
                           source: { type: string }
                       - type: 'null'
   schemas:
+    MetaConnection:
+      type: object
+      required: [page_id, page_access_token]
+      description: From Facebook Login on the frontend. The token is stored encrypted and never returned.
+      properties:
+        page_id: { type: string, example: '104857600001' }
+        page_access_token: { type: string, writeOnly: true }
+        form_ids: { type: array, items: { type: string }, description: Only these lead forms; empty = all forms on the page }
+    NotificationType:
+      type: string
+      enum: [lead.assigned, lead.reenquired, lead.untouched, lead.unassigned, lead.reassigned_away, task.assigned,
+             task.reminder, task.overdue, digest.overdue, deal.stale, deal.won, billing.read_only, billing.archived]
+    NotificationSettings:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { $ref: '#/components/schemas/NotificationType' }
+              label: { type: string }
+              in_app: { type: boolean, enum: [true] }
+              push: { type: boolean }
+              whatsapp: { type: boolean }
+        quiet_hours: { type: boolean }
+        quiet_hours_window: { type: string, example: '23:00-08:00' }
+        whatsapp_number: { type: [string, 'null'] }
+        whatsapp_number_effective: { type: [string, 'null'] }
+        push: { type: object, properties: { vapid_public_key: { type: [string, 'null'] }, devices: { type: integer } } }
+    AutomationKey:
+      type: string
+      enum: [welcome_message, auto_follow_up, no_answer_retry, stage_follow_up, stale_deal_alert, won_notice]
+    Automation:
+      type: object
+      properties:
+        key: { $ref: '#/components/schemas/AutomationKey' }
+        name: { type: string }
+        description: { type: string }
+        triggers: { type: array, items: { type: string }, example: [lead.received] }
+        enabled: { type: boolean }
+        settings: { type: object, description: Current settings with defaults applied }
+        settings_schema: { type: object, description: JSON Schema to render the settings form }
+        last_run_at: { type: [string, 'null'], format: date-time }
+        runs_7d: { type: integer }
+        failed_7d: { type: integer }
     PathOrPaths:
       oneOf: [{ type: string }, { type: array, items: { type: string }, maxItems: 10 }]
       description: Dot path into the payload (case-insensitive), or a list tried in order.
@@ -582,7 +1085,7 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
-        type: { type: string, example: lead.assigned, description: 'lead.assigned, lead.reenquired, lead.unassigned, lead.reassigned_away, task.assigned' }
+        type: { $ref: '#/components/schemas/NotificationType' }
         priority: { type: string, enum: [normal, urgent] }
         title: { type: string }
         body: { type: [string, 'null'] }
