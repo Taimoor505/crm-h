@@ -11,6 +11,9 @@ export interface LeadSourceSettings {
   redirect_url?: string;
   /** Tags added to every contact from this source. */
   default_tags?: string[];
+  /** meta_leadgen (set by the server): page and forms this source receives. */
+  meta_page_id?: string;
+  meta_form_ids?: string[];
 }
 
 export interface LeadSource {

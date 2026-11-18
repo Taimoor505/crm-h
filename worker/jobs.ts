@@ -1,6 +1,7 @@
 import { withService, type Tx } from '../server/db';
 import { claimJobs, completeJob, failJob, type Job } from '../server/queue';
 import { registerInboundContact } from '../server/leads/ingest';
+import { fetchMetaLead } from '../server/leads/meta';
 import { deliverNotification, dispatchNotification } from '../server/notifications/dispatch';
 
 type Handler = (tx: Tx, job: Job) => Promise<void>;
@@ -14,6 +15,9 @@ export const HANDLERS: Record<string, Handler> = {
   // are leads too, so give them the same enquiry tracking and assignment.
   'contact.created': async (tx, job) => {
     await registerInboundContact(tx, String(job.payload.contact_id));
+  },
+  'meta.fetch_lead': async (tx, job) => {
+    await fetchMetaLead(tx, String(job.payload.lead_event_id));
   },
   'notification.dispatch': async (tx, job) => {
     await dispatchNotification(tx, String(job.payload.notification_id));

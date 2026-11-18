@@ -18,6 +18,9 @@ export default defineConfig({
       SUPABASE_JWT_SECRET: 'test-secret-at-least-32-characters-long!!',
       APP_URL: 'https://crm.test',
       DATABASE_POOL_MAX: '4',
+      ENCRYPTION_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
+      META_APP_SECRET: 'meta-app-secret',
+      META_VERIFY_TOKEN: 'verify-me',
     },
   },
 });

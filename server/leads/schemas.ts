@@ -25,3 +25,11 @@ export const leadSourceSettingsSchema = z
     default_tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   })
   .strict();
+
+/** Facebook page connection for Meta lead ads. */
+export const metaConnectionSchema = z.object({
+  page_id: z.string().regex(/^\d{5,30}$/, 'Facebook page id'),
+  page_access_token: z.string().min(20).max(1000),
+  /** Only these lead forms; empty = every form on the page. */
+  form_ids: z.array(z.string().regex(/^\d{5,30}$/)).max(50).optional(),
+});
