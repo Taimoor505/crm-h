@@ -1,5 +1,5 @@
 import { api } from '../client';
-import { adaptWorkspace, money, moneyOrZero, type Raw } from '../adapters';
+import { adaptBrandingConfig, adaptWorkspace, money, moneyOrZero, type Raw } from '../adapters';
 import type {
   AssignmentRules, Automation, Branding, CommissionStatement, ImportJob, Invoice, LeadSource, PartnerDomain,
   PartnerWorkspace, Plan, RegionSettings, Subscription, Template, Workspace, WorkspaceRole, WorkspaceSettings,
@@ -193,6 +193,12 @@ export async function listPartnerWorkspaces(): Promise<PartnerWorkspace[]> {
 export async function createPartnerWorkspace(input: { name: string; template_key: string; region: RegionSettings; branding?: Partial<Branding>; owner?: { name: string; phone: string; role?: WorkspaceRole } }) {
   const r = await api.post<Raw>('/partner/workspaces', { ...input, ...input.region, locale: 'en' }, { workspaceId: false });
   return adaptWorkspace(r.workspace);
+}
+
+/** TODO(backend): missing endpoint (only PATCH exists), served by MSW. */
+export async function getPartnerBranding(): Promise<Branding> {
+  const r = await api.get<Raw>('/partner/branding', undefined, { workspaceId: false });
+  return adaptBrandingConfig(r.data ?? r.partner?.default_branding ?? {});
 }
 
 export async function updatePartnerBranding(branding: Partial<Branding>) {

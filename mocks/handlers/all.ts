@@ -1200,6 +1200,14 @@ export const allHandlers = [
     persist();
     return json({ workspace: ws }, { status: 201 });
   }),
+  http.get(`${BASE}/partner/branding`, async ({ request }) => {
+    await latency();
+    const db = getDb();
+    const user = userFromRequest(request);
+    const partner = db.partners.find((p) => p.id === user?.partner_admin_of);
+    if (!partner) return json({ error: 'Forbidden: partner admins only' }, { status: 403 });
+    return json({ data: partner.branding });
+  }),
   http.patch(`${BASE}/partner/branding`, async ({ request }) => {
     await latency();
     const db = getDb();

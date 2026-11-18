@@ -181,6 +181,7 @@ Each item below is served by an MSW handler in `mocks/handlers/missing.ts` (mark
 | `GET /whatsapp/saved-replies` | Inbox chips | Taimoor | `{ data: [{ id, title, body }] }` |
 | `GET /whatsapp/templates` | Inbox templates sheet | Taimoor | `{ data: [{ name, language, body, params }] }` |
 | `POST /conversations/{id}/read` | Inbox unread | Taimoor | `{ data: { unread_count: 0 } }` |
+| `GET /partner/branding` | Partner branding editor (only PATCH exists) | Taimoor | `{ data: BrandingConfig }` |
 | `GET /partner/domains`, `DELETE /partner/domains/{id}` | Partner domains | Taimoor | `{ data: [{ id, domain, verified, dns: { type, name, value } }] }` |
 
 ### Needs change

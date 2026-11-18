@@ -110,6 +110,12 @@ export const missingHandlers = [
     return json({ data: { unread_count: 0 } });
   }),
 
+  // TODO(backend): GET /partner/branding (only PATCH exists)
+  http.get(`${BASE}/partner/branding`, async () => {
+    await latency();
+    return json({ data: {} });
+  }),
+
   // TODO(backend): GET /partner/domains, DELETE /partner/domains/{id}
   http.get(`${BASE}/partner/domains`, async () => {
     await latency();
