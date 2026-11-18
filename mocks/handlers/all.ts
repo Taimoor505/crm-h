@@ -957,6 +957,40 @@ export const allHandlers = [
     }
   })),
 
+  // ---------- public lead capture (website form / webhook)
+  http.post(`${BASE}/hooks/leads/:key`, async ({ request, params }) => {
+    await latency();
+    const db = getDb();
+    const src = db.lead_sources.find((s) => s.public_key === params.key && s.is_active);
+    if (!src) return fail(404, 'not_found', 'Unknown or inactive source');
+    const ws = db.workspaces.find((w) => w.id === src.workspace_id)!;
+    const b = await body<Record<string, string>>(request);
+    if (b._hp) return HttpResponse.json({ ok: true, status: 'accepted', contact_id: null }, { status: 201 });
+    const e164 = normalizePhone(b.phone ?? b.mobile, ws.region.default_phone_country);
+    if (!e164) return fail(422, 'invalid_phone', 'No usable phone number');
+    const existing = db.contacts.find((c) => c.workspace_id === ws.id && c.phone_e164 === e164 && !c.deleted_at);
+    if (existing) {
+      existing.last_enquiry_at = nowIso();
+      activity(db, ws.id, existing.id, 'system', null, `Re-enquired via ${src.name}`, { kind: 're_enquiry', source_label: src.source_label });
+      persist();
+      return HttpResponse.json({ ok: true, status: 'reenquiry', contact_id: existing.id }, { status: 201 });
+    }
+    const now = nowIso();
+    const owner = nextOwner(db, ws);
+    const c: MContact = {
+      id: uid(), workspace_id: ws.id, name: (b.name || b.full_name || e164).trim(), phone_e164: e164, alt_phone: null, email: b.email || null, source: src.source_label,
+      owner_id: owner, status: 'new', tags: [], custom: {}, last_activity_at: now, created_at: now, updated_at: now, deleted_at: null, last_enquiry_at: now,
+      first_response_at: null, last_response_at: null, sample: false,
+    };
+    db.contacts.unshift(c);
+    activity(db, ws.id, c.id, 'system', null, `Lead received from ${src.name}${b.message ? `: ${b.message}` : ''}`, { kind: 'lead_received', source_label: src.source_label });
+    for (const m of db.memberships.filter((x) => x.workspace_id === ws.id && (owner ? x.user_id === owner : x.role !== 'agent'))) {
+      notify(db, ws.id, m.user_id, owner ? 'lead.assigned' : 'lead.unassigned', `New lead: ${c.name}`, { contact_id: c.id }, 'urgent');
+    }
+    persist();
+    return HttpResponse.json({ ok: true, status: 'created', contact_id: c.id }, { status: 201 });
+  }),
+
   // ---------- lead sources
   http.get(`${BASE}/lead-sources`, withAuth({ managerOnly: true }, (ctx, req, _p, db) =>
     json({ data: db.lead_sources.filter((s) => s.workspace_id === ctx.ws.id).map((s) => leadSourceOut(req, s)) }),
