@@ -63,14 +63,7 @@ function useVoiceRecorder() {
 }
 
 /** The global "+ Add lead" sheet. Only name and phone are required. */
-export function QuickAddLeadHost() {
-  const open = useUi((s) => s.quickAddOpen);
-  const prefill = useUi((s) => s.quickAddPrefill);
-  if (!open) return null;
-  return <QuickAddLead prefill={prefill} />;
-}
-
-function QuickAddLead({ prefill }: { prefill: { phone?: string; name?: string } | null }) {
+export default function QuickAddLead({ prefill }: { prefill: { phone?: string; name?: string } | null }) {
   const t = useTranslations('quickAdd');
   const c = useTranslations('common');
   const e = useTranslations('errors');

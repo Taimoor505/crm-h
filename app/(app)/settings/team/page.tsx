@@ -17,7 +17,7 @@ import { SettingsCard, SettingsPage } from '@/components/settings/SettingsCard';
 import { ResponsiveSheet } from '@/components/crm/ResponsiveSheet';
 import { PhoneInput, toPhoneValue, type PhoneValue } from '@/components/crm/PhoneInput';
 import { Avatar } from '@/components/crm/badges';
-import { PhoneText } from '@/components/crm/values';
+import { PhoneText } from '@/components/crm/PhoneText';
 import { ErrorState, ListSkeleton } from '@/components/crm/states';
 
 export default function TeamSettingsPage() {

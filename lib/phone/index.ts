@@ -49,18 +49,7 @@ export function formatPhone(e164: string | null | undefined, style: 'national' |
   return style === 'national' ? p.formatNational() : p.formatInternational();
 }
 
-/** Digits only, for wa.me links. */
-export function waDigits(e164: string): string {
-  return e164.replace(/\D/g, '');
-}
-
-export function waLink(e164: string, text?: string): string {
-  return `https://wa.me/${waDigits(e164)}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
-}
-
-export function telLink(e164: string): string {
-  return `tel:${e164}`;
-}
+export { waDigits, waLink, telLink } from './links';
 
 export function callingCode(country: string): string {
   try {

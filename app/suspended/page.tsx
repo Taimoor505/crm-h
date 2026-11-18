@@ -6,7 +6,7 @@ import { Mail, MessageCircle, PauseCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useBranding } from '@/lib/theme/BrandingProvider';
 import { useSession } from '@/lib/auth/SessionProvider';
-import { waLink } from '@/lib/phone';
+import { waLink } from '@/lib/phone/links';
 
 /** Full-page state for `403 workspace_suspended` (brief §8.11). */
 export default function SuspendedPage() {

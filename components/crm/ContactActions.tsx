@@ -7,7 +7,7 @@ import type { Task } from '@/lib/api/types';
 import { useCompleteTask } from '@/hooks/queries/work';
 import { useLogWhatsApp } from '@/hooks/queries/work';
 import { countUsefulAction, startCall } from '@/lib/ui-store';
-import { waLink } from '@/lib/phone';
+import { waLink } from '@/lib/phone/links';
 import { usePermissions } from '@/lib/permissions';
 import { cn, firstName } from '@/lib/utils';
 

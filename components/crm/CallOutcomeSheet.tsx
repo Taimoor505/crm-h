@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -8,39 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useLogCall } from '@/hooks/queries/crm';
 import { useCompleteTask, useCreateTask } from '@/hooks/queries/work';
-import { closeCallOutcome, countUsefulAction, getUi, openCallOutcome, useUi, type PendingCall } from '@/lib/ui-store';
+import { countUsefulAction, type PendingCall } from '@/lib/ui-store';
 import type { CallOutcome, Task } from '@/lib/api/types';
 import { ResponsiveSheet } from './ResponsiveSheet';
 import { Chip, DuePicker } from './DuePicker';
 
 const OUTCOMES: CallOutcome[] = ['answered', 'no_answer', 'busy', 'wrong_number'];
 
-/**
- * Opens when someone comes back to the app after tapping Call
- * (visibilitychange), or directly from a "Log call" button.
- */
-export function CallOutcomeHost() {
-  const call = useUi((s) => s.callOutcomeFor);
-
-  useEffect(() => {
-    const onVisible = () => {
-      const pending = getUi().pendingCall;
-      // Ignore the instant blur some browsers fire before the dialer opens.
-      if (document.visibilityState === 'visible' && pending && Date.now() - pending.startedAt > 1500) openCallOutcome(pending);
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onVisible);
-    };
-  }, []);
-
-  if (!call) return null;
-  return <CallOutcomeSheet key={call.startedAt} call={call} onClose={closeCallOutcome} />;
-}
-
-export function CallOutcomeSheet({ call, onClose }: { call: PendingCall; onClose: () => void }) {
+export default function CallOutcomeSheet({ call, onClose }: { call: PendingCall; onClose: () => void }) {
   const t = useTranslations('callOutcome');
   const [outcome, setOutcome] = useState<CallOutcome | null>(null);
   const [note, setNote] = useState('');

@@ -30,7 +30,8 @@ import { daysSince, dayKey, formatWeekday, formatDate, isToday } from '@/lib/for
 import { countUsefulAction } from '@/lib/ui-store';
 import type { Activity, Contact, CustomFieldDef, Deal, Pipeline } from '@/lib/api/types';
 import { Avatar, SourceBadge, StageBadge, StatusBadge } from '@/components/crm/badges';
-import { DateText, MoneyText, PhoneText, RelativeTime, TimeText } from '@/components/crm/values';
+import { DateText, MoneyText, RelativeTime, TimeText } from '@/components/crm/values';
+import { PhoneText } from '@/components/crm/PhoneText';
 import { CallButton, DoneButton, WhatsAppButton } from '@/components/crm/ContactActions';
 import { EmptyState, ErrorState, ListSkeleton, PageSkeleton } from '@/components/crm/states';
 import { ResponsiveSheet } from '@/components/crm/ResponsiveSheet';

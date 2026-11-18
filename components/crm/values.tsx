@@ -5,7 +5,6 @@ import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
 import {
   formatDate, formatDateTime, formatMoney, formatMoneyValue, formatRelative, formatTime, minutesSince, type Money,
 } from '@/lib/format';
-import { formatPhone } from '@/lib/phone';
 import { cn } from '@/lib/utils';
 
 export function MoneyText({ value, amount, currency, compact, className }: { value?: Money | null; amount?: number | null; currency?: string; compact?: boolean; className?: string }) {
@@ -65,15 +64,5 @@ export function TimeText({ iso, className }: { iso: string; className?: string }
     <time dateTime={iso} className={cn('tabular-nums', className)}>
       {formatTime(iso, s)}
     </time>
-  );
-}
-
-export function PhoneText({ e164, className }: { e164: string | null | undefined; className?: string }) {
-  const s = useWorkspaceSettings();
-  if (!e164) return null;
-  return (
-    <span dir="ltr" className={cn('tabular-nums', className)}>
-      {formatPhone(e164, 'auto', s.country)}
-    </span>
   );
 }
