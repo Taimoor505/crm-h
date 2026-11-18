@@ -209,6 +209,8 @@ describe('scheduled alerts', () => {
   it('reminds 15 minutes before a task is due, once', async () => {
     const task = (await call(tasks.POST, { method: 'POST', as: t.ali, ws: t.ws, body: { type: 'call', title: 'Ring Rizwan', due_at: minutesFromNow(10) } })).body.data;
     await call(tasks.POST, { method: 'POST', as: t.ali, ws: t.ws, body: { type: 'call', title: 'Later', due_at: minutesFromNow(60) } });
+    // Other test files share the database: only this task should be due for a reminder.
+    await admin`update public.tasks set reminder_sent_at = now() where id <> ${task.id}`;
     expect(await withService(sendTaskReminders)).toEqual({ reminded: 1 });
     expect(await withService(sendTaskReminders)).toEqual({ reminded: 0 });
     const [n] = await admin`select * from public.notifications where type = 'task.reminder' and data->>'task_id' = ${task.id}`;
