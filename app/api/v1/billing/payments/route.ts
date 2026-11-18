@@ -4,7 +4,6 @@ import { env } from '@/server/env';
 import { ApiError, json } from '@/server/http';
 import { storage } from '@/server/storage';
 import { billingRoute } from '@/server/billing/context';
-import { currentSubscription } from '@/server/billing/subscriptions';
 
 const schema = z.object({
   invoice_id: z.uuid(),
@@ -41,12 +40,11 @@ export const POST = billingRoute(async ({ req, tx, account, userId }) => {
   if (!inv) throw new ApiError(404, 'invoice_not_found', 'Invoice not found');
   if (inv.status === 'paid' || inv.status === 'void') throw new ApiError(409, 'invoice_closed', `Invoice is ${inv.status}`);
 
-  const sub = await currentSubscription(tx, account);
   const uploaded = await storage().upload(env.paymentProofsBucket, `${account.partnerId}/${randomUUID()}.${ext}`, proof, proof.type);
   const [payment] = await tx`
     insert into public.payments
       (partner_id, subscription_id, invoice_id, amount_pkr, method, reference, proof_url, submitted_by)
-    values (${account.partnerId}, ${sub?.id ?? inv.subscription_id}, ${inv.id}, ${body.amount_pkr}, ${body.method},
+    values (${account.partnerId}, ${inv.subscription_id}, ${inv.id}, ${body.amount_pkr}, ${body.method},
             ${body.reference ?? null}, ${uploaded.path}, ${userId})
     returning id, invoice_id, amount_pkr::float as amount_pkr, method, status, reference, created_at`;
   return json({ data: payment }, 201);

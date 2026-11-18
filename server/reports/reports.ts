@@ -140,7 +140,7 @@ export async function funnelReport(c: ReportCtx) {
              greatest(
                case when co.current_kind = 'open' then co.current_pos end,
                (select max(hs.position) from public.activities a
-                  join public.stages hs on hs.id = (a.meta ->> 'to_stage_id')::uuid and hs.kind = 'open'
+                  join public.stages hs on hs.id::text = a.meta ->> 'to_stage_id' and hs.kind = 'open'
                  where a.deal_id = co.id and a.type = 'stage_change')
              ) as max_open_pos
         from cohort co

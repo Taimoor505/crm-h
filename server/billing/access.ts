@@ -63,14 +63,13 @@ export async function enforceBilling(tx: Tx): Promise<{ overdue: number; read_on
       });
     }
   }
-  // Workspaces created after their subscription was restricted follow it too.
-  const restricted = await tx<Subscription[]>`
-    select * from public.subscriptions where status in ('read_only', 'archived')`;
-  for (const s of restricted) {
-    const ids = await controlledWorkspaceIds(tx, s);
-    await tx`update public.workspaces set status = ${s.status}
-              where id = any(${ids}::uuid[]) and status = 'active'`;
-  }
+  // Workspaces created after their subscription was restricted follow it too
+  // (one statement; only workspaces still 'active' are touched).
+  await tx`
+    update public.workspaces w set status = s.status
+      from public.subscriptions s
+     where s.status in ('read_only', 'archived') and w.status = 'active'
+       and w.id in (select id from public.subscription_workspaces(s.id))`;
   return { overdue: overdue.count, read_only: toReadOnly.length, archived: toArchive.length };
 }
 
@@ -112,3 +111,20 @@ export async function setSuspended(tx: Tx, partnerId: string, suspended: boolean
   return { workspaces: w.count };
 }
 
+
+/** Admin: suspend or lift one workspace (e.g. a direct customer) and its own subscription. */
+export async function setWorkspaceSuspended(tx: Tx, workspaceId: string, suspended: boolean): Promise<boolean> {
+  const w = suspended
+    ? await tx`update public.workspaces set status = 'suspended' where id = ${workspaceId} and status <> 'suspended'`
+    : await tx`update public.workspaces set status = 'active' where id = ${workspaceId} and status = 'suspended'`;
+  if (suspended) {
+    await tx`update public.subscriptions set status = 'suspended', updated_at = now()
+              where workspace_id = ${workspaceId} and status in ('trialing', 'active', 'read_only')`;
+  } else {
+    await tx`update public.subscriptions
+                set status = case when trial_ends_at > now() then 'trialing' else 'active' end, updated_at = now()
+              where workspace_id = ${workspaceId} and status = 'suspended'`;
+    await enforceBilling(tx);
+  }
+  return w.count > 0;
+}

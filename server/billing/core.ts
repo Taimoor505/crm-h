@@ -59,37 +59,16 @@ export async function dateStartTs(tx: Db, date: string): Promise<Date> {
   return r.t;
 }
 
-/**
- * Client workspaces a subscription pays for: its one workspace (direct
- * customer), or all of the partner's workspaces that don't have their own
- * subscription. Archived workspaces are not billed.
- */
-export function coveredWorkspacesSql(tx: Db, sub: Pick<Subscription, 'id' | 'partner_id' | 'workspace_id'>) {
-  return sub.workspace_id
-    ? tx`select w.id, w.name, w.status, w.created_at from public.workspaces w
-          where w.id = ${sub.workspace_id} and w.status <> 'archived'`
-    : tx`select w.id, w.name, w.status, w.created_at from public.workspaces w
-          where w.partner_id = ${sub.partner_id} and w.status <> 'archived'
-            and not exists (select 1 from public.subscriptions s2
-                             where s2.workspace_id = w.id and s2.id <> ${sub.id}
-                               and s2.status not in ('cancelled', 'archived'))`;
-}
-
-export async function coveredWorkspaces(tx: Db, sub: Pick<Subscription, 'id' | 'partner_id' | 'workspace_id'>) {
+/** Client workspaces a subscription pays for (archived ones are not billed). */
+export async function coveredWorkspaces(tx: Db, sub: Pick<Subscription, 'id'>) {
   return tx<{ id: string; name: string; status: string; created_at: Date }[]>`
-    select * from (${coveredWorkspacesSql(tx, sub)}) cw order by created_at, id`;
+    select id, name, status, created_at from public.subscription_workspaces(${sub.id})
+     where status <> 'archived' order by created_at, id`;
 }
 
 /** Workspace ids a subscription controls access for (incl. archived, for restore). */
-export async function controlledWorkspaceIds(tx: Db, sub: Pick<Subscription, 'id' | 'partner_id' | 'workspace_id'>): Promise<string[]> {
-  const rows = sub.workspace_id
-    ? await tx<{ id: string }[]>`select id from public.workspaces where id = ${sub.workspace_id}`
-    : await tx<{ id: string }[]>`
-        select w.id from public.workspaces w
-         where w.partner_id = ${sub.partner_id}
-           and not exists (select 1 from public.subscriptions s2
-                            where s2.workspace_id = w.id and s2.id <> ${sub.id}
-                              and s2.status not in ('cancelled', 'archived'))`;
+export async function controlledWorkspaceIds(tx: Db, sub: Pick<Subscription, 'id'>): Promise<string[]> {
+  const rows = await tx<{ id: string }[]>`select id from public.subscription_workspaces(${sub.id})`;
   return rows.map((r) => r.id);
 }
 

@@ -45,7 +45,11 @@ export async function startSubscription(
   args: { planId: string; identity?: string | null; userId: string },
 ): Promise<{ subscription: Subscription; trial: boolean; invoice_id: string | null }> {
   const existing = await currentSubscription(tx, a);
-  if (existing && existing.status !== 'archived') {
+  if (existing?.status === 'archived') {
+    // Its unpaid invoices still apply; a new subscription would sidestep them.
+    throw new ApiError(409, 'pay_outstanding', 'This account is archived for an unpaid invoice; pay it to restore access');
+  }
+  if (existing) {
     throw new ApiError(409, 'subscription_exists', 'There is already a subscription; change its plan instead');
   }
 

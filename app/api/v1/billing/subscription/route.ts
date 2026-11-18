@@ -27,6 +27,7 @@ export const POST = billingRoute(async ({ req, tx, account, userId }) => {
 
   const current = await currentSubscription(tx, account);
   if (current && current.status !== 'archived') {
+    // (An archived account is refused by startSubscription: pay to restore.)
     await changePlan(tx, current, body.plan_id);
     return json({ data: await subscriptionSummary(tx, account), changed: true });
   }

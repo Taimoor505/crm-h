@@ -57,6 +57,12 @@ export const POST = userRoute({}, async ({ req, tx, workspace, userId, isManager
     throw new ApiError(403, 'forbidden', 'Agents can only add leads for themselves');
   }
 
+  if (body.assign_to !== 'me' && body.assign_to !== 'auto') {
+    const [m] = await tx`select 1 from public.memberships
+                          where workspace_id = ${workspace.id} and user_id = ${body.assign_to} and status = 'active'`;
+    if (!m) throw new ApiError(422, 'invalid_assignee', 'Assignee is not an active member of this workspace');
+  }
+
   // Permission checks done; duplicate detection must see every contact.
   await elevate(tx);
   const directOwnerId = body.assign_to === 'me' ? userId : body.assign_to === 'auto' ? null : body.assign_to;

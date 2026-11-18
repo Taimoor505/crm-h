@@ -44,15 +44,12 @@ export async function recordLeadgen(tx: Db, change: LeadgenChange): Promise<'que
      limit 1`;
   if (!source) return 'no_source';
 
-  const [dup] = await tx`
-    select 1 from public.lead_events
-     where lead_source_id = ${source.id} and payload->>'leadgen_id' = ${change.leadgen_id}`;
-  if (dup) return 'duplicate';
-
   const [event] = await tx<{ id: string }[]>`
     insert into public.lead_events (workspace_id, lead_source_id, payload)
     values (${source.workspace_id}, ${source.id}, ${jsonb(tx, change)}::jsonb)
+    on conflict (lead_source_id, (payload ->> 'leadgen_id')) where payload ? 'leadgen_id' do nothing
     returning id`;
+  if (!event) return 'duplicate';
   await enqueue(tx, 'meta.fetch_lead', { lead_event_id: event.id }, {
     workspaceId: source.workspace_id,
     dedupeKey: `meta.fetch_lead:${event.id}`,

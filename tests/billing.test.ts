@@ -7,6 +7,7 @@ import * as statement from '@/app/api/v1/billing/commission-statement/route';
 import * as collections from '@/app/api/v1/billing/collections/route';
 import * as adminPartners from '@/app/api/v1/admin/partners/route';
 import * as adminSuspend from '@/app/api/v1/admin/partners/[id]/suspend/route';
+import * as adminWsSuspend from '@/app/api/v1/admin/workspaces/[id]/suspend/route';
 import * as adminPayments from '@/app/api/v1/admin/payments/route';
 import * as adminConfirm from '@/app/api/v1/admin/payments/[id]/confirm/route';
 import * as adminExtend from '@/app/api/v1/admin/trials/[id]/extend/route';
@@ -249,6 +250,16 @@ describe('unpaid invoices, payments and suspension', () => {
     expect(inv[0].total).toBe(10_800);
   });
 
+  it('a direct customer can be suspended on their own', async () => {
+    const [w] = await admin`select w.id, m.user_id from public.workspaces w join public.memberships m on m.workspace_id = w.id
+                             where w.name = 'Direct Dental'`;
+    const res = await call(adminWsSuspend.POST, { method: 'POST', ...asAdmin(), params: { id: w.id }, body: { suspended: true } });
+    expect(res.body.data).toMatchObject({ suspended: true, changed: true });
+    expect((await call(tasks.GET, { as: w.user_id, ws: w.id })).body.error.code).toBe('workspace_suspended');
+    await call(adminWsSuspend.POST, { method: 'POST', ...asAdmin(), params: { id: w.id }, body: { suspended: false } });
+    expect((await call(tasks.GET, { as: w.user_id, ws: w.id })).status).toBe(200);
+  });
+
   it('goes read-only after the due date, then archived after 30 days, and owners are told', async () => {
     p = await partner('Late Payers', 1);
     owner = await createUser('Late owner');
@@ -280,6 +291,11 @@ describe('unpaid invoices, payments and suspension', () => {
     expect(await withService(enforceBilling)).toMatchObject({ archived: 1 });
     expect((await admin`select status from public.workspaces where id = ${p.ws[0]}`)[0].status).toBe('archived');
     expect((await call(tasks.GET, { as: owner, ws: p.ws[0] })).status).toBe(200); // data kept, readable
+    // No fresh subscription to dodge the unpaid invoice; restoring the old one stays possible.
+    const dodge = await call(subscription.POST, { method: 'POST', ...asPartner(p), body: { plan_id: 'monthly' } });
+    expect(dodge.body.error.code).toBe('pay_outstanding');
+    await withService(enforceBilling);
+    expect((await admin`select count(*)::int as n from public.subscriptions where partner_id = ${p.id}`)[0].n).toBe(1);
   });
 
   it('partner uploads proof; super-admin confirms; access comes back', async () => {

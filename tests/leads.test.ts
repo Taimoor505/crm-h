@@ -351,6 +351,12 @@ describe('POST /leads/quick-add', () => {
     expect(res.status).toBe(403);
   });
 
+  it('refuses to make a non-member the owner', async () => {
+    const outsider = (await team('Outsiders')).ali;
+    const res = await call(quickAdd.POST, { method: 'POST', as: t.manager, ws: t.ws, body: { phone: '03336000099', assign_to: outsider } });
+    expect(res.body.error.code).toBe('invalid_assignee');
+  });
+
   it('lets managers send a quick-add through the rules', async () => {
     await call(rules.PUT, { method: 'PUT', as: t.manager, ws: t.ws, body: { mode: 'round_robin', agent_ids: [t.bilal] } });
     const res = await call(quickAdd.POST, { method: 'POST', as: t.manager, ws: t.ws, body: { phone: '03336000004', assign_to: 'auto' } });

@@ -109,6 +109,8 @@ describe('reports', () => {
   });
 
   it('funnel: reached counts per stage, conversion and win rate', async () => {
+    // A malformed stage_change activity must not break the report.
+    await admin`insert into public.activities (workspace_id, type, meta) values (${t.ws}, 'stage_change', '{"to_stage_id": "not-a-uuid"}')`;
     const res = await get('funnel', { pipeline_id: pipeline });
     const d = res.body.data;
     expect(d).toMatchObject({ deals: 6, won: 1, lost: 2, open: 3, win_rate_pct: 33.3 });

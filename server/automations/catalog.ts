@@ -137,6 +137,8 @@ const autoFollowUp = define({
       type: ctx.settings.type,
       dueAt: new Date(Date.now() + ctx.settings.due_in_minutes * 60_000),
       origin: 'automation',
+      // The agent was just alerted about the lead itself; the 15-minute reminder covers the task.
+      notifyAssignee: false,
     });
     return { status: 'success', result: { task_id: task.id } };
   },

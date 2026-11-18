@@ -61,6 +61,8 @@ export async function createTask(
     dueAt: string | Date;
     origin?: TaskOrigin;
     parentTaskId?: string | null;
+    /** Tell the assignee (default: when someone else assigned it). */
+    notifyAssignee?: boolean;
   },
 ): Promise<Task> {
   let title = t.title?.trim();
@@ -73,6 +75,11 @@ export async function createTask(
     title ||= `${VERB[t.type]} ${c.name ?? c.phone_e164 ?? 'contact'}`;
   }
   title ||= VERB[t.type].replace(/ with$/, '');
+  if (t.dealId) {
+    const [d] = await tx`select 1 from public.deals
+                          where id = ${t.dealId} and workspace_id = ${t.workspaceId} and deleted_at is null`;
+    if (!d) throw new ApiError(404, 'deal_not_found', 'Deal not found');
+  }
 
   const [assignee] = await tx<{ user_id: string }[]>`
     select user_id from public.memberships
@@ -101,7 +108,7 @@ export async function createTask(
     });
   }
 
-  if (task.assigned_to !== t.createdBy) {
+  if ((t.notifyAssignee ?? true) && task.assigned_to !== t.createdBy) {
     await notify(tx, {
       workspaceId: t.workspaceId,
       userId: task.assigned_to,

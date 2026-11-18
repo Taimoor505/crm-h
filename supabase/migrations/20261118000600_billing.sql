@@ -64,6 +64,24 @@ create unique index subscriptions_one_current
 create unique index subscriptions_one_current_per_workspace
   on public.subscriptions (workspace_id) where workspace_id is not null and status not in ('cancelled', 'archived');
 
+-- The workspaces a subscription controls: its one workspace (direct customer),
+-- or all of the partner's workspaces that don't have their own current
+-- subscription. Single definition used by billing and by access enforcement.
+create or replace function public.subscription_workspaces(p_subscription_id uuid)
+returns setof public.workspaces
+language sql stable security definer set search_path = '' as $$
+  select w.*
+    from public.subscriptions s
+    join public.workspaces w
+      on (s.workspace_id is not null and w.id = s.workspace_id)
+      or (s.workspace_id is null and w.partner_id = s.partner_id
+          and not exists (select 1 from public.subscriptions s2
+                           where s2.workspace_id = w.id and s2.id <> s.id
+                             and s2.status not in ('cancelled', 'archived')))
+   where s.id = p_subscription_id
+$$;
+revoke all on function public.subscription_workspaces(uuid) from public, anon, authenticated;
+
 -- One free first month per real-world customer. identity_key is a normalised
 -- NTN, CNIC or owner phone, so registering a new brand name doesn't reset it.
 create table public.billing_trials (
@@ -198,3 +216,4 @@ grant all on public.plans, public.platform_admins, public.subscriptions, public.
   public.partner_invoices, public.invoice_lines, public.billing_runs, public.payments,
   public.commission_ledger, public.usage_counters to service_role;
 grant usage, select on sequence public.partner_invoice_seq to service_role;
+grant execute on function public.subscription_workspaces(uuid) to service_role;

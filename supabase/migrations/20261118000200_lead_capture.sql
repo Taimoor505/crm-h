@@ -52,6 +52,9 @@ create table public.lead_events (
 );
 create index lead_events_workspace_idx on public.lead_events (workspace_id, received_at desc);
 create index lead_events_received_idx on public.lead_events (received_at);
+-- Meta retries webhooks: one row per lead per source, even under concurrent deliveries.
+create unique index lead_events_meta_leadgen_key on public.lead_events (lead_source_id, (payload ->> 'leadgen_id'))
+  where payload ? 'leadgen_id';
 
 -- ---------------------------------------------------------------------------
 -- First-response tracking. Runs on every activity insert so it works no

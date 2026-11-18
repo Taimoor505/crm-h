@@ -15,7 +15,7 @@ export const POST = adminRoute<{ id: string }>(async ({ req, tx, params, userId 
   const [p] = await tx<{ is_house: boolean }[]>`select is_house from public.partners where id = ${params.id}`;
   if (!p) throw new ApiError(404, 'not_found', 'Partner not found');
   if (p.is_house && body.suspended) {
-    throw new ApiError(422, 'house_partner', 'Suspend direct customers individually, not the house partner');
+    throw new ApiError(422, 'house_partner', 'Suspend direct customers one by one with POST /admin/workspaces/:id/suspend');
   }
   const result = await setSuspended(tx, params.id, body.suspended);
   await tx`update public.partners set status = ${body.suspended ? 'suspended' : 'active'} where id = ${params.id}`;
