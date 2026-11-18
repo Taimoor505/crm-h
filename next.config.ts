@@ -1,4 +1,9 @@
 import type {NextConfig} from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+
+const hasDb = Boolean(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL);
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -7,6 +12,10 @@ const nextConfig: NextConfig = {
   },
   typescript: {
     ignoreBuildErrors: false,
+  },
+  env: {
+    // Lets the frontend pick its API mock mode (mocks/mode.ts) without exposing the URL.
+    NEXT_PUBLIC_HAS_DB: hasDb ? 'true' : 'false',
   },
   // Allow access to remote image placeholder.
   images: {
@@ -33,4 +42,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withNextIntl(nextConfig);
