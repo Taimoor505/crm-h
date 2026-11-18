@@ -1,0 +1,620 @@
+openapi: 3.1.0
+info:
+  title: CRM API (lead capture, assignment, tasks, notifications)
+  version: 0.1.0
+  description: |
+    Huzaifa's part of the shared /api/v1 contract. To be merged into the shared
+    OpenAPI file once Taimoor's lands.
+
+    **Auth:** `Authorization: Bearer <Supabase access token>` and
+    `X-Workspace-Id: <uuid>` on every endpoint except `/hooks/*`.
+    Agents only ever see their own leads and tasks (enforced by RLS).
+
+    **Errors:** `{ "error": { "code", "message", "details"? } }`.
+    Common codes: `unauthorized` 401, `not_a_member` / `forbidden` /
+    `workspace_read_only` 403, `not_found` 404, `conflict` 409,
+    `validation_failed` 422 (details: [{path, message}]), `rate_limited` 429.
+
+    **Lists** are cursor-paginated: pass `next_cursor` back as `cursor`.
+    **Times** are ISO 8601 UTC; "today" means the workspace's timezone.
+servers:
+  - url: /api/v1
+security:
+  - bearer: []
+tags:
+  - name: Lead capture
+  - name: Assignment
+  - name: Tasks
+  - name: Notifications
+  - name: Home
+  - name: Billing
+
+paths:
+  /lead-sources:
+    get:
+      tags: [Lead capture]
+      summary: List lead sources (managers)
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/LeadSource' } }
+    post:
+      tags: [Lead capture]
+      summary: Create a lead source (managers)
+      description: For `webhook` sources the response includes `secret`. It is shown only here and on rotation.
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, name]
+              properties:
+                type: { type: string, enum: [website_form, webhook, meta_leadgen, manual] }
+                name: { type: string, maxLength: 100, example: 'Zapier: Zameen.com' }
+                source_label:
+                  type: string
+                  pattern: '^[a-z0-9_-]{1,40}$'
+                  description: Stored as contacts.source and used by "by source" assignment. Defaults per type (website, webhook, facebook, manual).
+                mapping: { $ref: '#/components/schemas/LeadMapping' }
+                settings: { $ref: '#/components/schemas/LeadSourceSettings' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/LeadSource'
+                      - type: object
+                        properties: { secret: { type: string, example: whsec_... } }
+
+  /lead-sources/{id}:
+    patch:
+      tags: [Lead capture]
+      summary: Update or rotate a lead source (managers)
+      parameters: [{ $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                source_label: { type: string }
+                mapping: { $ref: '#/components/schemas/LeadMapping' }
+                settings: { $ref: '#/components/schemas/LeadSourceSettings' }
+                is_active: { type: boolean }
+                rotate_secret: { type: boolean, enum: [true], description: Webhook sources only. Returns the new `secret`. }
+      responses:
+        '200': { description: Updated source (with `secret` if rotated) }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /hooks/leads/{key}:
+    post:
+      tags: [Lead capture]
+      summary: Receive a lead (public)
+      security: []
+      description: |
+        `key` is the source's `public_key`.
+
+        * **website_form**: called from the browser (`/embed/lead-form.js`) or a plain HTML form
+          (`application/x-www-form-urlencoded`, then a 303 redirect to `settings.redirect_url` when set).
+          Checked against `settings.allowed_origins`, a honeypot field and rate limits (60/min per
+          source, 10/min per IP).
+        * **webhook**: server-to-server (Zapier, Make, n8n, partner sites). Send either
+          `X-Signature: sha256=<hex HMAC-SHA256 of the raw body with the secret>` or
+          `X-Webhook-Secret: <secret>`. Limit 300/min per source.
+
+        Fields are read via the source's mapping, falling back to common names (name, full_name,
+        phone, mobile, cell, email, message...). Meta-style `field_data` arrays are understood.
+        A known phone does not create a new contact: it is logged as a re-enquiry and routed as a
+        fresh lead. The raw payload is kept 30 days in `lead_events`.
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string, example: ls_abc123 } }
+        - { name: X-Signature, in: header, schema: { type: string } }
+        - { name: X-Webhook-Secret, in: header, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true, example: { name: Ahmed Khan, phone: 0300-1234567, message: Interested in DHA Phase 6 } }
+          application/x-www-form-urlencoded:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  status: { type: string, enum: [created, reenquiry, accepted] }
+                  contact_id: { type: [string, 'null'], format: uuid }
+        '303': { description: Redirect for plain HTML form posts }
+        '401': { description: Bad or missing signature }
+        '403': { description: Origin not allowed }
+        '404': { description: Unknown or inactive source }
+        '422': { description: 'No usable phone or email (codes: invalid_phone, missing_contact_details)' }
+        '429': { description: Rate limited }
+    options:
+      tags: [Lead capture]
+      summary: CORS preflight for website forms
+      security: []
+      parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+      responses: { '204': { description: CORS headers when the Origin is allowed } }
+
+  /leads/quick-add:
+    post:
+      tags: [Lead capture]
+      summary: Quick-add a lead, optionally with a voice note
+      description: |
+        Send JSON, or `multipart/form-data` with the same fields plus a `voice` audio file (≤10 MB).
+        A duplicate phone returns 200 with `status: reenquiry` and does not change the owner;
+        `contact` is null if the caller can't see it (owned by a colleague).
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuickAdd' }
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/QuickAdd'
+                - type: object
+                  properties:
+                    voice: { type: string, format: binary }
+                    tags: { type: string, description: Comma-separated }
+      responses:
+        '201': { $ref: '#/components/responses/QuickAddResult' }
+        '200': { $ref: '#/components/responses/QuickAddResult' }
+        '403': { description: An agent tried to assign to someone else }
+
+  /assignment-rules:
+    get:
+      tags: [Assignment]
+      summary: Current assignment rules and team availability
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/AssignmentRules' } }
+    put:
+      tags: [Assignment]
+      summary: Replace assignment rules (managers)
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignmentRulesInput' }
+      responses:
+        '200': { description: Saved rules (same shape as GET) }
+        '422': { description: 'validation_failed, or invalid_members (details.user_ids)' }
+
+  /availability:
+    put:
+      tags: [Assignment]
+      summary: Mark yourself (or, as a manager, someone) available or unavailable
+      description: Unavailable people are skipped by round-robin, by-source and auto-reassign.
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [available]
+              properties:
+                available: { type: boolean }
+                user_id: { type: string, format: uuid, description: Managers only; defaults to the caller }
+      responses:
+        '200': { description: OK }
+        '403': { description: Agent tried to change someone else }
+
+  /contacts/{id}/assign:
+    post:
+      tags: [Assignment]
+      summary: Assign or unassign a contact by hand (managers)
+      parameters: [{ $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties: { user_id: { type: [string, 'null'], format: uuid } }
+      responses:
+        '200':
+          description: Writes an `assignment` activity and notifies the new owner.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      contact_id: { type: string, format: uuid }
+                      owner_id: { type: [string, 'null'], format: uuid }
+                      changed: { type: boolean }
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: List tasks
+      description: |
+        Ordered by due time. `due` buckets don't overlap: overdue = before now; today = now until
+        midnight (workspace time); upcoming = after today. `due` implies `status=open`.
+        Agents always get only their own tasks.
+      parameters:
+        - $ref: '#/components/parameters/Workspace'
+        - { name: assigned_to, in: query, schema: { type: string, description: "'me', 'all' or a user id" } }
+        - { name: status, in: query, schema: { type: string, enum: [open, done, cancelled, all], default: open } }
+        - { name: due, in: query, schema: { type: string, enum: [today, overdue, upcoming] } }
+        - { name: contact_id, in: query, schema: { type: string, format: uuid } }
+        - { name: deal_id, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/TaskWithContact' } }
+                  next_cursor: { type: [string, 'null'] }
+    post:
+      tags: [Tasks]
+      summary: Create a task
+      description: Title defaults from the type and contact ("Call Ahmed"). Agents can only assign to themselves.
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, due_at]
+              properties:
+                contact_id: { type: [string, 'null'], format: uuid }
+                deal_id: { type: [string, 'null'], format: uuid }
+                assigned_to: { type: string, format: uuid }
+                type: { $ref: '#/components/schemas/TaskType' }
+                title: { type: string, maxLength: 200 }
+                notes: { type: string }
+                due_at: { type: string, format: date-time }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Task' } } } } } }
+        '404': { description: contact_not_found (or not visible to the caller) }
+
+  /tasks/{id}:
+    patch:
+      tags: [Tasks]
+      summary: Edit, reschedule, reassign (managers) or cancel a task
+      parameters: [{ $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                notes: { type: [string, 'null'] }
+                type: { $ref: '#/components/schemas/TaskType' }
+                due_at: { type: string, format: date-time, description: Rescheduling re-arms the reminder }
+                assigned_to: { type: string, format: uuid }
+                status: { type: string, enum: [open, cancelled] }
+      responses:
+        '200': { description: Updated task }
+        '409': { description: Completed tasks can't be reopened }
+
+  /tasks/{id}/complete:
+    post:
+      tags: [Tasks]
+      summary: Complete a task, optionally creating the next follow-up
+      description: Completing a call / WhatsApp / meeting / site visit counts as a response for speed-to-lead.
+      parameters: [{ $ref: '#/components/parameters/Workspace' }, { $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                outcome: { type: string, maxLength: 100, example: interested }
+                note: { type: string }
+                next: { $ref: '#/components/schemas/FollowUp' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      task: { $ref: '#/components/schemas/Task' }
+                      next: { oneOf: [{ $ref: '#/components/schemas/Task' }, { type: 'null' }] }
+        '409': { description: task_not_open }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: The caller's notifications, newest first
+      parameters:
+        - $ref: '#/components/parameters/Workspace'
+        - { name: unread, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+                  unread_count: { type: integer }
+                  next_cursor: { type: [string, 'null'] }
+
+  /notifications/read:
+    post:
+      tags: [Notifications]
+      summary: Mark notifications read
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - { type: object, required: [ids], properties: { ids: { type: array, items: { type: string, format: uuid } } } }
+                - { type: object, required: [all], properties: { all: { type: boolean, enum: [true] } } }
+      responses:
+        '200': { description: '{ data: { marked_read: n } }' }
+
+  /home/summary:
+    get:
+      tags: [Home]
+      summary: Everything the home screen needs in one call
+      parameters:
+        - $ref: '#/components/parameters/Workspace'
+        - { name: scope, in: query, schema: { type: string, enum: [me, team], default: me }, description: team is managers only }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HomeSummary' }
+
+  /billing/plans:
+    get:
+      tags: [Billing]
+      summary: Plans and prices (per client workspace, PKR)
+      parameters: [{ $ref: '#/components/parameters/Workspace' }]
+      responses:
+        '200': { description: OK }
+
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT, description: Supabase Auth access token }
+  parameters:
+    Workspace: { name: X-Workspace-Id, in: header, required: true, schema: { type: string, format: uuid } }
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+    Cursor: { name: cursor, in: query, schema: { type: string } }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties: { code: { type: string }, message: { type: string }, details: {} }
+    QuickAddResult:
+      description: Created (201) or re-enquiry (200)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  contact_id: { type: string, format: uuid }
+                  status: { type: string, enum: [created, reenquiry] }
+                  owner_id: { type: [string, 'null'], format: uuid }
+                  voice_note_path: { type: [string, 'null'], example: voice-notes/<ws>/<contact>/<uuid>.webm }
+                  contact:
+                    oneOf:
+                      - type: object
+                        properties:
+                          id: { type: string }
+                          name: { type: [string, 'null'] }
+                          phone_e164: { type: string }
+                          owner_id: { type: [string, 'null'] }
+                          source: { type: string }
+                      - type: 'null'
+  schemas:
+    PathOrPaths:
+      oneOf: [{ type: string }, { type: array, items: { type: string }, maxItems: 10 }]
+      description: Dot path into the payload (case-insensitive), or a list tried in order.
+    LeadMapping:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { $ref: '#/components/schemas/PathOrPaths' }
+        first_name: { $ref: '#/components/schemas/PathOrPaths' }
+        last_name: { $ref: '#/components/schemas/PathOrPaths' }
+        phone: { $ref: '#/components/schemas/PathOrPaths' }
+        email: { $ref: '#/components/schemas/PathOrPaths' }
+        notes: { $ref: '#/components/schemas/PathOrPaths' }
+        custom:
+          type: object
+          description: custom_field key → path
+          additionalProperties: { $ref: '#/components/schemas/PathOrPaths' }
+        tags: { type: array, items: { type: string } }
+      example: { name: full_name, phone: [phone, contact.mobile], custom: { budget: budget_pkr }, tags: [ppc] }
+    LeadSourceSettings:
+      type: object
+      additionalProperties: false
+      properties:
+        allowed_origins: { type: array, items: { type: string, format: uri }, description: 'website_form: empty = any site' }
+        redirect_url: { type: string, format: uri }
+        default_tags: { type: array, items: { type: string } }
+    LeadSource:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, enum: [website_form, webhook, meta_leadgen, whatsapp, manual, import] }
+        name: { type: string }
+        source_label: { type: string }
+        public_key: { type: string }
+        mapping: { $ref: '#/components/schemas/LeadMapping' }
+        settings: { $ref: '#/components/schemas/LeadSourceSettings' }
+        is_active: { type: boolean }
+        endpoint_url: { type: [string, 'null'], description: URL to give Zapier / the website }
+        embed_snippet: { type: [string, 'null'], description: HTML to paste into the website (website_form) }
+        created_at: { type: string, format: date-time }
+    QuickAdd:
+      type: object
+      required: [phone]
+      properties:
+        name: { type: string }
+        phone: { type: string, example: 0300-1234567 }
+        email: { type: string, format: email }
+        note: { type: string }
+        assign_to: { type: string, description: "'me' (default), 'auto' (rules; managers) or a user id (managers)" }
+        source_label: { type: string, default: manual }
+        tags: { type: array, items: { type: string } }
+    AssignmentRulesInput:
+      type: object
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [manual, round_robin, by_source] }
+        agent_ids: { type: array, items: { type: string, format: uuid }, description: Rotation pool, in order }
+        source_map:
+          type: object
+          description: source_label or lead_source_id → users (several rotate)
+          additionalProperties: { type: array, items: { type: string, format: uuid } }
+          example: { facebook: [ali-uuid], website: [sara-uuid, bilal-uuid] }
+        fallback: { type: string, enum: [round_robin, unassigned], default: round_robin }
+        reassign_after_minutes: { type: [integer, 'null'], minimum: 5, maximum: 1440, description: null = off (default) }
+        max_auto_reassigns: { type: integer, minimum: 1, maximum: 10, default: 2 }
+    AssignmentRules:
+      allOf:
+        - $ref: '#/components/schemas/AssignmentRulesInput'
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                type: object
+                properties:
+                  user_id: { type: string, format: uuid }
+                  name: { type: [string, 'null'] }
+                  role: { type: string, enum: [owner, manager, agent] }
+                  available: { type: boolean }
+    TaskType: { type: string, enum: [call, whatsapp, meeting, site_visit, other] }
+    FollowUp:
+      type: object
+      required: [due_at]
+      properties:
+        type: { $ref: '#/components/schemas/TaskType' }
+        due_at: { type: string, format: date-time }
+        title: { type: string }
+        notes: { type: string }
+        assigned_to: { type: string, format: uuid }
+    Task:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        contact_id: { type: [string, 'null'], format: uuid }
+        deal_id: { type: [string, 'null'], format: uuid }
+        assigned_to: { type: string, format: uuid }
+        created_by: { type: [string, 'null'], format: uuid }
+        type: { $ref: '#/components/schemas/TaskType' }
+        title: { type: string }
+        notes: { type: [string, 'null'] }
+        due_at: { type: string, format: date-time }
+        status: { type: string, enum: [open, done, cancelled] }
+        completed_at: { type: [string, 'null'], format: date-time }
+        outcome: { type: [string, 'null'] }
+        origin: { type: string, enum: [manual, call_outcome, task_completion, automation] }
+        parent_task_id: { type: [string, 'null'], format: uuid }
+    TaskWithContact:
+      allOf:
+        - $ref: '#/components/schemas/Task'
+        - type: object
+          properties:
+            is_overdue: { type: boolean }
+            contact:
+              oneOf:
+                - type: object
+                  properties: { id: { type: string }, name: { type: [string, 'null'] }, phone_e164: { type: [string, 'null'] } }
+                - type: 'null'
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, example: lead.assigned, description: 'lead.assigned, lead.reenquired, lead.unassigned, lead.reassigned_away, task.assigned' }
+        priority: { type: string, enum: [normal, urgent] }
+        title: { type: string }
+        body: { type: [string, 'null'] }
+        data: { type: object, description: 'Deep-link ids: contact_id, task_id, ...' }
+        read_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+    HomeSummary:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            scope: { type: string, enum: [me, team] }
+            timezone: { type: string, example: Asia/Karachi }
+            me: { type: object, properties: { user_id: { type: string }, role: { type: string }, available: { type: boolean } } }
+            tasks:
+              type: object
+              properties:
+                overdue: { type: integer }
+                due_today: { type: integer }
+                upcoming: { type: integer }
+                next: { type: array, description: Up to 10 overdue + due-today tasks, oldest first, items: { type: object } }
+            leads:
+              type: object
+              properties:
+                new_today: { type: integer }
+                awaiting_first_response: { type: integer }
+                unassigned: { type: [integer, 'null'], description: null for agents }
+                recent: { type: array, maxItems: 5, items: { type: object } }
+            speed_to_lead_today:
+              type: object
+              properties:
+                median_seconds: { type: [integer, 'null'] }
+                responded: { type: integer }
+            notifications: { type: object, properties: { unread: { type: integer } } }
