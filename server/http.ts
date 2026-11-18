@@ -1,6 +1,6 @@
 import { z, ZodError } from 'zod';
 import { bearerToken, verifyAccessToken } from './auth';
-import { withUser, type Tx } from './db';
+import { withService, withUser, type Tx } from './db';
 
 export class ApiError extends Error {
   constructor(
@@ -104,6 +104,9 @@ export function userRoute<P = Record<string, string>>(
         if (opts.managerOnly && !isManager) {
           throw new ApiError(403, 'forbidden', 'Only workspace owners and managers can do this');
         }
+        if (m.status === 'suspended') {
+          throw new ApiError(403, 'workspace_suspended', 'This workspace is suspended; contact support');
+        }
         if (req.method !== 'GET' && m.status !== 'active') {
           throw new ApiError(403, 'workspace_read_only', `Workspace is ${m.status}; changes are disabled`);
         }
@@ -116,6 +119,25 @@ export function userRoute<P = Record<string, string>>(
           tx,
         });
       });
+    } catch (err) {
+      return errorResponse(err);
+    }
+  };
+}
+
+/**
+ * Wraps an endpoint that only needs a signed-in user (no workspace). The
+ * handler gets a service-role transaction and must authorise the user itself
+ * (billing and super-admin endpoints, whose tables have no RLS policies).
+ */
+export function authRoute<P = Record<string, string>>(
+  handler: (c: { req: Request; params: P; userId: string; tx: Tx }) => Promise<Response>,
+): NextHandler<P> {
+  return async (req, ctx) => {
+    try {
+      const { userId } = await verifyAccessToken(bearerToken(req));
+      const params = (await ctx?.params) ?? ({} as P);
+      return await withService((tx) => handler({ req, params, userId, tx }));
     } catch (err) {
       return errorResponse(err);
     }

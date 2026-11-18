@@ -40,6 +40,9 @@ beforeAll(async () => {
       uploads.push(`${bucket}/${path}`);
       return { path: `${bucket}/${path}` };
     },
+    async signedUrl(p) {
+      return `https://storage.test/${p}?token=x`;
+    },
   });
 });
 

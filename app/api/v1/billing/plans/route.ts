@@ -1,7 +1,7 @@
-import { json, userRoute } from '@/server/http';
+import { authRoute, json } from '@/server/http';
 
-// GET /billing/plans: the four plans with their current prices.
-export const GET = userRoute({}, async ({ tx }) => {
+// GET /billing/plans: the four plans with their current prices (any signed-in user).
+export const GET = authRoute(async ({ tx }) => {
   const plans = await tx`
     select id, name, billing_type, period_months,
            price_per_period_pkr::float as price_per_period_pkr,
@@ -12,5 +12,9 @@ export const GET = userRoute({}, async ({ tx }) => {
       from public.plans
      where is_active
      order by period_months, id`;
-  return json({ data: plans, currency: 'PKR', notes: 'Per client workspace. WhatsApp messages billed at cost on every plan.' });
+  return json({
+    data: plans,
+    currency: 'PKR',
+    notes: 'Per client workspace. First month free for new partners (up to 5 workspaces). WhatsApp messages billed at cost on every plan.',
+  });
 });

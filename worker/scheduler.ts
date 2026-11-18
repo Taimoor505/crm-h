@@ -4,6 +4,8 @@ import {
   sendOverdueAlerts, sendOverdueDigests, sendTaskReminders, sendUntouchedLeadAlerts,
 } from '../server/followups/alerts';
 import { runStaleDealAlerts } from '../server/automations/engine';
+import { runMonthlyBilling } from '../server/billing/run';
+import { enforceBilling } from '../server/billing/access';
 
 export interface ScheduledJob {
   key: string;
@@ -26,6 +28,9 @@ export const SCHEDULE: ScheduledJob[] = [
   { key: 'leads.untouched_alerts', everyMinutes: 1, run: (tx) => sendUntouchedLeadAlerts(tx) },
   { key: 'digest.overdue', everyMinutes: 15, run: (tx) => sendOverdueDigests(tx) },
   { key: 'automations.stale_deals', everyMinutes: 60, run: (tx) => runStaleDealAlerts(tx) },
+  // Bills each subscription once per month (billing_runs), so hourly is just a retry net.
+  { key: 'billing.monthly_run', everyMinutes: 60, run: (tx) => runMonthlyBilling(tx) },
+  { key: 'billing.enforce', everyMinutes: 60, run: (tx) => enforceBilling(tx) },
   {
     key: 'jobs.recover_stale',
     everyMinutes: 5,

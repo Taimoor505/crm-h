@@ -25,6 +25,9 @@ export const env = {
   get appUrl() {
     return (process.env.APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
   },
+  get paymentProofsBucket() {
+    return process.env.PAYMENT_PROOFS_BUCKET ?? 'payment-proofs';
+  },
   get voiceNotesBucket() {
     return process.env.VOICE_NOTES_BUCKET ?? 'voice-notes';
   },

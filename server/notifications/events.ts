@@ -22,6 +22,8 @@ export const EVENT_TYPES = {
   'digest.overdue': { label: 'Daily overdue digest (managers)', push: true, whatsapp: false },
   'deal.stale': { label: 'Deal stuck in a stage', push: true, whatsapp: false },
   'deal.won': { label: 'Deal won by the team', push: true, whatsapp: false },
+  'billing.read_only': { label: 'Workspace read-only: invoice unpaid (owners, managers)', push: true, whatsapp: true },
+  'billing.archived': { label: 'Workspace archived: invoice unpaid 30 days (owners, managers)', push: true, whatsapp: true },
 } as const satisfies Record<string, EventTypeDef>;
 
 export type NotificationType = keyof typeof EVENT_TYPES;

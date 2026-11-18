@@ -49,6 +49,17 @@ create table public.memberships (
   unique (user_id, workspace_id)
 );
 
+-- Partner admins (white-label reseller staff). They manage billing and can
+-- support their own client workspaces.
+create table public.partner_members (
+  partner_id uuid not null references public.partners (id) on delete cascade,
+  user_id uuid not null references public.users (id) on delete cascade,
+  role text not null default 'admin' check (role in ('admin')),
+  status text not null default 'active' check (status in ('active', 'disabled')),
+  created_at timestamptz not null default now(),
+  primary key (partner_id, user_id)
+);
+
 create table public.contacts (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
@@ -140,6 +151,7 @@ alter table public.partners enable row level security;
 alter table public.workspaces enable row level security;
 alter table public.users enable row level security;
 alter table public.memberships enable row level security;
+alter table public.partner_members enable row level security;
 alter table public.contacts enable row level security;
 alter table public.pipelines enable row level security;
 alter table public.stages enable row level security;
@@ -148,6 +160,9 @@ alter table public.activities enable row level security;
 
 create policy workspaces_member_read on public.workspaces for select
   using (public.is_workspace_member(id));
+
+create policy partner_members_self_read on public.partner_members for select
+  using (user_id = auth.uid());
 
 create policy memberships_member_read on public.memberships for select
   using (public.is_workspace_member(workspace_id));

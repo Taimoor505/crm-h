@@ -2,6 +2,8 @@ import { env } from './env';
 
 export interface StorageDriver {
   upload(bucket: string, path: string, body: Blob, contentType: string): Promise<{ path: string }>;
+  /** Temporary download link for a private object ("bucket/path"). */
+  signedUrl(objectPath: string, expiresInSeconds: number): Promise<string>;
 }
 
 /** Supabase Storage over its REST API, using the service role key. */
@@ -21,6 +23,16 @@ const supabaseStorage: StorageDriver = {
     });
     if (!res.ok) throw new Error(`Storage upload failed: ${res.status} ${await res.text()}`);
     return { path: `${bucket}/${path}` };
+  },
+  async signedUrl(objectPath, expiresInSeconds) {
+    const res = await fetch(`${env.supabaseUrl}/storage/v1/object/sign/${objectPath}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${env.supabaseServiceRoleKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ expiresIn: expiresInSeconds }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { signedURL?: string };
+    if (!res.ok || !body.signedURL) throw new Error(`Storage sign failed: ${res.status}`);
+    return `${env.supabaseUrl}/storage/v1${body.signedURL}`;
   },
 };
 
