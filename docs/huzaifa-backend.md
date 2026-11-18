@@ -6,7 +6,7 @@ assignment, tasks and follow-ups, notifications (in-app, web push, agent
 WhatsApp), preset automations, reports, and plans/billing for partners.
 
 API reference: [`openapi/huzaifa.yaml`](../openapi/huzaifa.yaml) (38 paths).
-Tests: 141, against real Postgres with RLS (`npm test`).
+Tests: 143, against real Postgres with RLS, on Taimoor's schema (`npm test`).
 
 ## Stack decisions
 
@@ -25,7 +25,7 @@ Tests: 141, against real Postgres with RLS (`npm test`).
 
 ```bash
 npm install
-cp .env.example .env.local      # fill in the Supabase section, ENCRYPTION_KEY, VAPID keys
+cp .env.example .env.local      # fill in Supabase (SUPABASE_DB_URL), ENCRYPTION_KEY, VAPID keys
 supabase db push                # applies supabase/migrations/* (incl. storage buckets)
 npm run dev                     # API on :3000
 npm run worker                  # separate, always-on process: queue + scheduler
@@ -61,57 +61,22 @@ Queue handlers: `contact.created` (inbound WhatsApp leads), `lead.received`,
 `call.logged`, `deal.stage_changed`, `deal.won` (automations),
 `meta.fetch_lead`, `notification.dispatch`, `notification.deliver`.
 
-## Contract with the core schema (for Taimoor)
+## Integration with Taimoor's core
 
-`supabase/migrations/20261118000000_core_stub.sql`, `server/core/*` are a
-**stub** of Taimoor's part so this work runs and is tested. Replace them. My code
-relies on exactly this:
+Taimoor's schema (`supabase/migrations/001`-`003`) is the core.
+`20261118000000_core_compat.sql` connects my migrations to it (grants on the
+`app` schema, RLS helper wrappers, `read_only`/`archived` workspace statuses,
+nullable `contacts.owner_id`, an insert policy on `activities`).
+Partner admins are `users.partner_admin_of`. Phone normalisation is his
+`lib/taimoor/phone.ts`. His `domain_events` rows become jobs via a trigger.
 
-**Tables / columns:** `partners(id, name, is_house, status)`,
-`partner_members(partner_id, user_id, status)` (partner admins),
-`workspaces(id, partner_id, name, timezone, status ∈ active|read_only|archived|suspended, created_at)`,
-`memberships(workspace_id, user_id, role ∈ owner|manager|agent, status='active')`,
-`users(id, name, phone)`,
-`contacts(id, workspace_id, name, phone_e164, email, source, owner_id, tags, custom, deleted_at, created_at)` with a unique index on `(workspace_id, phone_e164)`,
-`pipelines(id, workspace_id, position)`, `stages(id, pipeline_id, name, position, kind ∈ open|won|lost)`,
-`deals(id, workspace_id, pipeline_id, stage_id, contact_id, title, value_pkr, owner_id, lost_reason, stage_entered_at, created_at, deleted_at)`,
-`activities(workspace_id, contact_id, deal_id, type, actor_id, body, meta, created_at)`.
+His routes still run on the sandbox store (`lib/taimoor/store.ts`), so until
+they move to Postgres our data isn't shared. `server/core/contacts.ts` is the
+Postgres contact service my lead capture uses meanwhile.
 
-**Columns I add to `contacts`:** `first_response_at`, `last_response_at`,
-`last_enquiry_at`, `assigned_at`, `auto_reassign_count`, `untouched_alerted_at`.
-**Indexes I add** for reports (`…0900_report_indexes.sql`).
-
-**RLS helpers:** `is_workspace_member(ws)`, `is_workspace_manager(ws)`, `workspace_role(ws)`.
-
-**Functions from `server/core/`:** `normalizePhone`, `createOrGetContact`
-(race-safe dedupe on phone, emits `contact.created` once), `logActivity`, and
-`whatsapp().sendTemplate({ workspaceId, to, template, language, params })`.
-Your sender should route by workspace (its own number) and use the platform
-number when `workspaceId` is null (agent alerts). Call
-`recordWhatsAppUsage(tx, workspaceId)` (`server/usage.ts`) for every template you
-send so it's billed as pass-through.
-
-**Events to emit** (inside the write's transaction):
-`select public.enqueue_job('<name>', '<payload>'::jsonb, workspace_id, now(), '<dedupe key>')`
-or `enqueue()` from `server/queue.ts`.
-
-| Event | Payload I read |
-|---|---|
-| `contact.created` | `contact_id`, `source` (I handle `source = 'whatsapp'` as a new lead) |
-| `call.logged` | `contact_id`, `outcome` (e.g. `no_answer`), `actor_id` |
-| `deal.stage_changed` | `deal_id`, `from_stage_id`, `to_stage_id` |
-| `deal.won` | `deal_id` |
-
-Also write `stage_change` activities with `meta.to_stage_id`; the funnel report
-reads stage history from them.
-
-**Call outcome → follow-up:** in `POST /contacts/:id/calls`, when the body has
-`follow_up: { type, due_at, title?, assigned_to? }`, call
-`createFollowUpFromCall(tx, …)` from `server/tasks/service.ts` in the same transaction.
-
-**First response:** a trigger on `activities` sets `contacts.first_response_at`
-on the first `call`, `whatsapp` or `note` logged by a user. Nothing to call.
-Set `meta.counts_as_response = false` on activities that shouldn't count.
+Everything I need from him is in [`for-taimoor.md`](for-taimoor.md): events and
+payloads, the call follow-up hook, the WhatsApp sender contract and
+`recordWhatsAppUsage`.
 
 ## For Habib
 
@@ -178,7 +143,8 @@ add a nightly rollup then). Dates are workspace-local days; agents only see thei
 
 ## Known limits
 
-* `server/core/*` and the core stub migration are placeholders for Taimoor's code.
+* Taimoor's routes use his sandbox store until they move to Postgres; data isn't shared until then.
+* Leads need a phone number (contacts are keyed by phone in the core schema).
 * No mid-month proration: a workspace added mid-month starts paying from the next 1st.
 * Commission collections are self-reported by partners (as the brief says: manual
   settlement first, automate later).

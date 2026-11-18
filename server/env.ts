@@ -1,15 +1,11 @@
 // Server-side configuration. Read lazily so tests can set env before first use.
 
-function required(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing required environment variable ${name}`);
-  return v;
-}
-
 export const env = {
-  /** Direct Postgres connection (Supabase: Settings > Database > connection string). */
+  /** Direct Postgres connection; Taimoor's name SUPABASE_DB_URL, DATABASE_URL as alias. */
   get databaseUrl() {
-    return required('DATABASE_URL');
+    const url = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
+    if (!url) throw new Error('Missing required environment variable SUPABASE_DB_URL (or DATABASE_URL)');
+    return url;
   },
   get supabaseUrl() {
     return process.env.SUPABASE_URL ?? '';

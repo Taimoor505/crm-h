@@ -6,7 +6,7 @@ import * as quickAdd from '@/app/api/v1/leads/quick-add/route';
 import { closeDb, withUser } from '@/server/db';
 import { logActivity } from '@/server/core/contacts';
 import { createFollowUpFromCall } from '@/server/tasks/service';
-import { admin, call, minutesFromNow, team } from './helpers';
+import { admin, call, contactFor, minutesFromNow, stage, team } from './helpers';
 
 let t: Awaited<ReturnType<typeof team>>;
 let aliLead: string;
@@ -52,8 +52,9 @@ describe('POST /tasks', () => {
   it("won't attach a task to another workspace's deal", async () => {
     const other = await team('Deal Elsewhere');
     const [pl] = await admin`insert into public.pipelines (workspace_id, name) values (${other.ws}, 'P') returning id`;
-    const [stg] = await admin`insert into public.stages (pipeline_id, name) values (${pl.id}, 'S') returning id`;
-    const [d] = await admin`insert into public.deals (workspace_id, pipeline_id, stage_id, title) values (${other.ws}, ${pl.id}, ${stg.id}, 'x') returning id`;
+    const stg = await stage(other.ws, pl.id, 'S');
+    const [d] = await admin`insert into public.deals (workspace_id, pipeline_id, stage_id, contact_id, owner_id, title)
+                            values (${other.ws}, ${pl.id}, ${stg}, ${await contactFor(other.ws)}, ${other.ali}, 'x') returning id`;
     const res = await create(t.manager, { deal_id: d.id, type: 'call', due_at: minutesFromNow(60) });
     expect(res.body.error.code).toBe('deal_not_found');
   });

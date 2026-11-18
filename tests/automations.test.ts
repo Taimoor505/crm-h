@@ -9,10 +9,12 @@ import { enqueue } from '@/server/queue';
 import { setWhatsAppSender, type TemplateMessage } from '@/server/core/whatsapp';
 import { runStaleDealAlerts } from '@/server/automations/engine';
 import { processJobs } from '@/worker/jobs';
-import { admin, call, team } from './helpers';
+import { admin, call, contactFor, stage, team } from './helpers';
 
 let t: Awaited<ReturnType<typeof team>>;
-const sent: TemplateMessage[] = [];
+const allSent: TemplateMessage[] = [];
+/** Messages to leads (agent alerts go from the platform number, workspaceId null). */
+const toLeads = () => allSent.filter((m) => m.workspaceId !== null);
 let waFails = false;
 let stages: { open: string; visit: string; won: string; lost: string };
 let pipeline: string;
@@ -23,10 +25,11 @@ async function drain() {
 const patch = (key: string, body: unknown, as = t.manager) =>
   call(automationByKey.PATCH, { method: 'PATCH', as, ws: t.ws, params: { key }, body });
 
-async function deal(title: string, stage: string, opts: { owner?: string; contact?: string | null; value?: number; enteredDaysAgo?: number } = {}) {
+async function deal(title: string, stageId: string, opts: { owner?: string; contact?: string | null; value?: number; enteredDaysAgo?: number } = {}) {
   const [d] = await admin<{ id: string }[]>`
     insert into public.deals (workspace_id, pipeline_id, stage_id, contact_id, title, value_pkr, owner_id, stage_entered_at)
-    values (${t.ws}, ${pipeline}, ${stage}, ${opts.contact ?? null}, ${title}, ${opts.value ?? null}, ${opts.owner ?? t.ali},
+    values (${t.ws}, ${pipeline}, ${stageId}, ${opts.contact ?? (await contactFor(t.ws, opts.owner ?? t.ali))}, ${title},
+            ${opts.value ?? 0}, ${opts.owner ?? t.ali},
             now() - make_interval(days => ${opts.enteredDaysAgo ?? 0}))
     returning id`;
   return d.id;
@@ -36,27 +39,25 @@ beforeAll(async () => {
   setWhatsAppSender({
     async sendTemplate(msg) {
       if (waFails) throw new Error('template not approved');
-      sent.push(msg);
-      return { messageId: `wamid.auto.${sent.length}` };
+      allSent.push(msg);
+      return { messageId: `wamid.auto.${allSent.length}` };
     },
   });
   t = await team('Auto Estates');
   await call(rules.PUT, { method: 'PUT', as: t.manager, ws: t.ws, body: { mode: 'round_robin', agent_ids: [t.ali] } });
   const [p] = await admin<{ id: string }[]>`insert into public.pipelines (workspace_id, name) values (${t.ws}, 'Sales') returning id`;
   pipeline = p.id;
-  const ins = (name: string, pos: number, kind: string) =>
-    admin<{ id: string }[]>`insert into public.stages (pipeline_id, name, position, kind) values (${pipeline}, ${name}, ${pos}, ${kind}) returning id`;
   stages = {
-    open: (await ins('New', 0, 'open'))[0].id,
-    visit: (await ins('Site visit', 1, 'open'))[0].id,
-    won: (await ins('Won', 2, 'won'))[0].id,
-    lost: (await ins('Lost', 3, 'lost'))[0].id,
+    open: await stage(t.ws, pipeline, 'New', 0, 'open'),
+    visit: await stage(t.ws, pipeline, 'Site visit', 1, 'open'),
+    won: await stage(t.ws, pipeline, 'Won', 2, 'won'),
+    lost: await stage(t.ws, pipeline, 'Lost', 3, 'lost'),
   };
 });
 
 beforeEach(async () => {
   await admin`delete from public.jobs`;
-  sent.length = 0;
+  allSent.length = 0;
   waFails = false;
 });
 
@@ -102,9 +103,10 @@ describe('lead rules', () => {
     const id = (await call(quickAdd.POST, { method: 'POST', as: t.manager, ws: t.ws, body: { name: 'Haris Sohail', phone: '03211000001', assign_to: 'auto' } })).body.data.contact_id;
     await drain();
 
-    expect(sent).toEqual([{ workspaceId: t.ws, to: '+923211000001', template: 'welcome_lead', language: 'ur', params: ['Haris'] }]);
+    expect(toLeads()).toEqual([{ workspaceId: t.ws, to: '+923211000001', template: 'welcome_lead', language: 'ur', params: ['Haris'] }]);
     const [wa] = await admin`select body, meta from public.activities where contact_id = ${id} and type = 'whatsapp'`;
-    expect(wa.meta).toMatchObject({ automation: 'welcome_message', message_id: 'wamid.auto.1' });
+    expect(wa.meta).toMatchObject({ automation: 'welcome_message' });
+    expect(wa.meta.message_id).toMatch(/^wamid\.auto\.\d+$/);
     expect((await admin`select first_response_at from public.contacts where id = ${id}`)[0].first_response_at).toBeNull();
 
     const [task] = await admin`select * from public.tasks where contact_id = ${id}`;
@@ -120,7 +122,7 @@ describe('lead rules', () => {
   it('on a re-enquiry: no second welcome, no duplicate follow-up while one is open', async () => {
     await call(quickAdd.POST, { method: 'POST', as: t.manager, ws: t.ws, body: { phone: '+923211000001', assign_to: 'auto' } });
     await drain();
-    expect(sent).toHaveLength(0);
+    expect(toLeads()).toHaveLength(0);
     const r = await admin`select automation_key, status, result from public.automation_runs
                            where trigger_event = 'lead.received' order by created_at desc limit 2`;
     expect(Object.fromEntries(r.map((x) => [x.automation_key, x.result.reason]))).toEqual({
@@ -187,7 +189,7 @@ describe('deal rules', () => {
     const ns = await admin`select user_id, title from public.notifications where type = 'deal.won' and data->>'deal_id' = ${d}`;
     expect(ns).toHaveLength(4);
     expect(ns[0].title).toBe('Deal won by Ali: 10 marla, DHA (Rs. 25,000,000)');
-    expect(sent).toEqual([{ workspaceId: t.ws, to: '+923211000001', template: 'thank_you', language: 'en', params: ['Haris'] }]);
+    expect(toLeads()).toEqual([{ workspaceId: t.ws, to: '+923211000001', template: 'thank_you', language: 'en', params: ['Haris'] }]);
   });
 
   it('stale deal alert: once per deal per stage visit', async () => {

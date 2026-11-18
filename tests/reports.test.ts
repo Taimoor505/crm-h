@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as reports from '@/app/api/v1/reports/[name]/route';
 import { closeDb } from '@/server/db';
-import { admin, call, team } from './helpers';
+import { admin, call, contactFor, stage, team } from './helpers';
 
 let t: Awaited<ReturnType<typeof team>>;
 let pipeline: string;
@@ -15,29 +15,30 @@ const get = (name: string, query: Record<string, string> = {}, as = t.manager) =
 async function lead(at: string, source: string, owner: string | null, respondMin: number | null, kind = 'lead_received') {
   const created = new Date(`${at}+05:00`);
   const [c] = await admin<{ id: string }[]>`
-    insert into public.contacts (workspace_id, phone_e164, source, owner_id, created_at, last_enquiry_at, first_response_at)
-    values (${t.ws}, ${'+92300' + Math.floor(1e6 + Math.random() * 8.9e6)}, ${source}, ${owner}, ${created}, ${created},
+    insert into public.contacts (workspace_id, name, phone_e164, source, owner_id, created_at, last_enquiry_at, first_response_at)
+    values (${t.ws}, 'Lead', ${'+92300' + Math.floor(1e6 + Math.random() * 8.9e6)}, ${source}, ${owner}, ${created}, ${created},
             ${respondMin === null ? null : new Date(created.getTime() + respondMin * 60_000)})
     returning id`;
   await admin`insert into public.activities (workspace_id, contact_id, type, body, meta, created_at)
               values (${t.ws}, ${c.id}, 'system', 'lead', ${admin.json({ kind, source_label: source })}, ${created})`;
   if (owner) {
-    await admin`insert into public.activities (workspace_id, contact_id, type, meta, created_at)
-                values (${t.ws}, ${c.id}, 'assignment', ${admin.json({ to: owner, reason: 'new_lead' })}, ${created})`;
+    await admin`insert into public.activities (workspace_id, contact_id, type, body, meta, created_at)
+                values (${t.ws}, ${c.id}, 'assignment', '', ${admin.json({ to: owner, reason: 'new_lead' })}, ${created})`;
   }
   return c.id;
 }
 
-async function deal(stage: string, owner: string, opts: { created: string; entered: string; value?: number; lostReason?: string;
+async function deal(stageName: string, owner: string, opts: { created: string; entered: string; value?: number; lostReason?: string;
   history?: string[]; contact?: string }) {
   const [d] = await admin<{ id: string }[]>`
     insert into public.deals (workspace_id, pipeline_id, stage_id, contact_id, title, value_pkr, owner_id, lost_reason, created_at, stage_entered_at)
-    values (${t.ws}, ${pipeline}, ${st[stage]}, ${opts.contact ?? null}, ${'Deal'}, ${opts.value ?? null}, ${owner}, ${opts.lostReason ?? null},
+    values (${t.ws}, ${pipeline}, ${st[stageName]}, ${opts.contact ?? (await contactFor(t.ws, owner))}, ${'Deal'}, ${opts.value ?? 0},
+            ${owner}, ${opts.lostReason ?? null},
             ${new Date(`${opts.created}+05:00`)}, ${new Date(`${opts.entered}+05:00`)})
     returning id`;
   for (const h of opts.history ?? []) {
-    await admin`insert into public.activities (workspace_id, deal_id, type, meta, created_at)
-                values (${t.ws}, ${d.id}, 'stage_change', ${admin.json({ to_stage_id: st[h] })}, ${new Date(`${opts.created}+05:00`)})`;
+    await admin`insert into public.activities (workspace_id, deal_id, type, body, meta, created_at)
+                values (${t.ws}, ${d.id}, 'stage_change', '', ${admin.json({ to_stage_id: st[h] })}, ${new Date(`${opts.created}+05:00`)})`;
   }
   return d.id;
 }
@@ -47,7 +48,7 @@ beforeAll(async () => {
   const [p] = await admin<{ id: string }[]>`insert into public.pipelines (workspace_id, name) values (${t.ws}, 'Plots') returning id`;
   pipeline = p.id;
   for (const [name, pos, kind] of [['New', 0, 'open'], ['Contacted', 1, 'open'], ['Visit', 2, 'open'], ['Won', 3, 'won'], ['Lost', 4, 'lost']] as const) {
-    st[name] = (await admin<{ id: string }[]>`insert into public.stages (pipeline_id, name, position, kind) values (${pipeline}, ${name}, ${pos}, ${kind}) returning id`)[0].id;
+    st[name] = await stage(t.ws, pipeline, name, pos, kind);
   }
 
   // Leads (PKT times). Ali: 2 min and 30 min; Sara: 4 min, 10 min, never. One unassigned.
@@ -110,7 +111,7 @@ describe('reports', () => {
 
   it('funnel: reached counts per stage, conversion and win rate', async () => {
     // A malformed stage_change activity must not break the report.
-    await admin`insert into public.activities (workspace_id, type, meta) values (${t.ws}, 'stage_change', '{"to_stage_id": "not-a-uuid"}')`;
+    await admin`insert into public.activities (workspace_id, type, body, meta) values (${t.ws}, 'stage_change', '', '{"to_stage_id": "not-a-uuid"}')`;
     const res = await get('funnel', { pipeline_id: pipeline });
     const d = res.body.data;
     expect(d).toMatchObject({ deals: 6, won: 1, lost: 2, open: 3, win_rate_pct: 33.3 });

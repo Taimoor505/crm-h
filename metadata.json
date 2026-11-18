@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Taimoor Core — White-Label CRM Backend & Schema Explorer",
+  "description": "Multi-tenant Supabase/PostgreSQL CRM backend workbench, OpenAPI 3.1 live runner, RLS isolation tester, and bilingual EN/UR industry template engine.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+:root {
+  --brand-primary: #059669;
+  --brand-primary-hover: #047857;
+  --brand-surface: #ecfdf5;
+  --brand-ink: #065f46;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-body), system-ui, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display), system-ui, sans-serif;
+    text-wrap: balance;
+  }
+
+  code, pre, kbd, .font-mono {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.font-urdu {
+  font-family: var(--font-urdu), var(--font-body), system-ui, sans-serif;
+  line-height: 1.75;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

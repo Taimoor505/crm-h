@@ -41,6 +41,10 @@ language sql stable as $$
   )
 $$;
 
+-- Supabase grants table access to the API roles by default (RLS then decides).
+alter default privileges in schema public grant select, insert, update, delete on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant usage, select on sequences to anon, authenticated, service_role;
+
 grant usage on schema auth to anon, authenticated, service_role;
 grant usage on schema public to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;

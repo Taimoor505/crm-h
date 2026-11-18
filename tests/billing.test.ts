@@ -32,9 +32,10 @@ const ym = (date: string) => date.slice(0, 7);
 let superAdmin: string;
 
 async function partner(name: string, workspaces: number) {
-  const [p] = await admin<{ id: string }[]>`insert into public.partners (name) values (${name}) returning id`;
+  const [p] = await admin<{ id: string }[]>`
+    insert into public.partners (name, slug) values (${name}, ${`${name.toLowerCase().replace(/\W+/g, '-')}-${Date.now()}`}) returning id`;
   const adminUser = await createUser(`${name} admin`);
-  await admin`insert into public.partner_members (partner_id, user_id) values (${p.id}, ${adminUser})`;
+  await admin`update public.users set partner_admin_of = ${p.id} where id = ${adminUser}`;
   const ws: string[] = [];
   for (let i = 1; i <= workspaces; i++) ws.push(await clientWorkspace(p.id, `${name} client ${i}`));
   return { id: p.id, admin: adminUser, ws };
@@ -239,7 +240,7 @@ describe('unpaid invoices, payments and suspension', () => {
 
   it('a direct customer can subscribe for their own workspace', async () => {
     const [house] = await admin`select id from public.partners where is_house limit 1`;
-    const houseId = house?.id ?? (await admin`insert into public.partners (name, is_house) values ('House', true) returning id`)[0].id;
+    const houseId = house?.id ?? (await admin`insert into public.partners (name, slug, is_house) values ('House', 'house-billing', true) returning id`)[0].id;
     const ws = await clientWorkspace(houseId, 'Direct Dental');
     const o = await createUser('Dr. Direct');
     await addMember(ws, o, 'owner');

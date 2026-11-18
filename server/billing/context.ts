@@ -16,9 +16,9 @@ export async function resolveBillingAccount(tx: Tx, req: Request, userId: string
   if (partnerHeader) {
     const pid = uuid.safeParse(partnerHeader);
     if (!pid.success) throw new ApiError(400, 'bad_partner', 'X-Partner-Id must be a uuid');
+    // Partner admins are marked on users.partner_admin_of (Taimoor's core schema).
     const [m] = await tx`
-      select 1 from public.partner_members
-       where partner_id = ${pid.data} and user_id = ${userId} and status = 'active'`;
+      select 1 from public.users where id = ${userId} and partner_admin_of = ${pid.data}`;
     if (!m) throw new ApiError(403, 'not_partner_admin', 'You are not an admin of this partner');
     return { partnerId: pid.data, workspaceId: null };
   }

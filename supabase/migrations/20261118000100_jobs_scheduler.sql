@@ -58,6 +58,22 @@ begin
   return v_id;
 end $$;
 
+-- Taimoor's outbox: every row written to public.domain_events (contact.created,
+-- call.logged, deal.stage_changed, deal.won, ...) becomes a job, in the same
+-- transaction. Either enqueue_job() or domain_events works; this keeps one queue.
+create or replace function public.domain_event_to_job() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.jobs (queue, name, payload, workspace_id, dedupe_key)
+  values ('default', new.event_name, coalesce(new.payload, '{}'), new.workspace_id, 'domain_event:' || new.id)
+  on conflict (dedupe_key) do nothing;
+  return new;
+end $$;
+
+create trigger domain_events_to_jobs
+  after insert on public.domain_events
+  for each row execute function public.domain_event_to_job();
+
 -- One row per (scheduled job, time window). The primary key is what makes a
 -- scheduler tick idempotent: two workers racing on the same minute insert the
 -- same key and only one of them runs the job.

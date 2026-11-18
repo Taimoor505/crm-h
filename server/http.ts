@@ -99,11 +99,16 @@ export function userRoute<P = Record<string, string>>(
       const params = (await ctx?.params) ?? ({} as P);
 
       return await withUser(userId, async (tx) => {
+        // A member, or an admin of the workspace's partner (support access,
+        // treated as a manager, the same as Taimoor's RLS helpers).
         const [m] = await tx<{ role: Role; timezone: string; status: string }[]>`
-          select m.role, w.timezone, w.status
-          from public.memberships m
-          join public.workspaces w on w.id = m.workspace_id
-          where m.workspace_id = ${ws.data} and m.user_id = ${userId} and m.status = 'active'`;
+          select coalesce(m.role, 'manager') as role, w.timezone, w.status
+          from public.workspaces w
+          left join public.memberships m
+            on m.workspace_id = w.id and m.user_id = ${userId} and m.status = 'active'
+          left join public.users u on u.id = ${userId}
+          where w.id = ${ws.data}
+            and (m.id is not null or u.partner_admin_of = w.partner_id)`;
         if (!m) throw new ApiError(403, 'not_a_member', 'You are not a member of this workspace');
         const isManager = m.role === 'owner' || m.role === 'manager';
         if (opts.managerOnly && !isManager) {

@@ -44,11 +44,12 @@ export async function ingestLead(
 ): Promise<IngestResult> {
   const { workspaceId, source, lead } = args;
   const phone = normalizePhone(lead.phone);
-  if (lead.phone && !phone && !lead.email) {
+  // Contacts are keyed by phone in the core schema, so a lead needs one.
+  if (lead.phone && !phone) {
     throw new ApiError(422, 'invalid_phone', `"${lead.phone}" is not a valid phone number`);
   }
-  if (!phone && !lead.email) {
-    throw new ApiError(422, 'missing_contact_details', 'A lead needs a phone number or an email');
+  if (!phone) {
+    throw new ApiError(422, 'missing_phone', 'A lead needs a phone number');
   }
 
   const tags = [...new Set([...(source.default_tags ?? []), ...lead.tags])];
@@ -63,13 +64,14 @@ export async function ingestLead(
   });
 
   // Mark the enquiry. On a re-enquiry, fill gaps from the new payload without
-  // overwriting what the team already knows, and restore a soft-deleted contact.
+  // overwriting what the team already knows (a name that is just the phone
+  // number counts as a gap).
   const [contact] = await tx<Contact[]>`
     update public.contacts
        set last_enquiry_at = now(),
            auto_reassign_count = 0,
-           deleted_at = null,
-           name = coalesce(name, ${lead.name}),
+           name = case when (name = phone_e164 or name = '') and ${lead.name}::text is not null
+                       then ${lead.name} else name end,
            email = coalesce(email, ${lead.email}),
            custom = ${jsonb(tx, lead.custom)}::jsonb || custom,
            tags = array(select distinct unnest(tags || ${tags}::text[])),
@@ -148,7 +150,8 @@ export async function ingestLead(
 export async function registerInboundContact(tx: Db, contactId: string): Promise<boolean> {
   const [contact] = await tx<Contact[]>`
     select * from public.contacts where id = ${contactId} and last_enquiry_at is null for update`;
-  if (!contact || contact.source !== 'whatsapp') return false;
+  // Taimoor's WhatsApp webhook uses source 'WhatsApp Inbound'.
+  if (!contact || !/whatsapp/i.test(contact.source ?? '')) return false;
 
   await tx`update public.contacts set last_enquiry_at = coalesce(last_enquiry_at, created_at)
            where id = ${contact.id}`;

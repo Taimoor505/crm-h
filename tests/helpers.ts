@@ -15,10 +15,19 @@ export async function token(userId: string): Promise<string> {
     .sign(new TextEncoder().encode(process.env.SUPABASE_JWT_SECRET!));
 }
 
+let phoneSeq = 0;
+/** A unique, valid-looking number for test users (+92399xxxxxxx). */
+export function uniquePhone(): string {
+  phoneSeq += 1;
+  return `+92399${String(process.pid % 1000).padStart(3, '0')}${String(phoneSeq).padStart(4, '0')}`;
+}
+
 export async function createUser(name: string): Promise<string> {
   const id = randomUUID();
   await admin`insert into auth.users (id, email) values (${id}, ${`${id}@test.local`})`;
-  await admin`insert into public.users (id, name) values (${id}, ${name})`;
+  // Taimoor's users table: phone and email are required, phone unique.
+  await admin`insert into public.users (id, name, phone, email)
+              values (${id}, ${name}, ${uniquePhone()}, ${`${id}@test.local`})`;
   return id;
 }
 
@@ -27,7 +36,7 @@ let housePartner: string | null = null;
 export async function createWorkspace(name = 'Test Realty', timezone = 'Asia/Karachi') {
   if (!housePartner) {
     const [p] = await admin<{ id: string }[]>`
-      insert into public.partners (name, is_house) values ('House', true) returning id`;
+      insert into public.partners (name, slug, is_house) values ('House', ${`house-${randomUUID()}`}, true) returning id`;
     housePartner = p.id;
   }
   const [ws] = await admin<{ id: string }[]>`
@@ -92,4 +101,20 @@ export async function call(handler: unknown, opts: CallOptions = {}) {
 
 export function minutesFromNow(m: number): string {
   return new Date(Date.now() + m * 60_000).toISOString();
+}
+
+/** A contact to hang a deal on (deals.contact_id is required in the core schema). */
+export async function contactFor(workspaceId: string, ownerId: string | null = null, name = 'Deal contact'): Promise<string> {
+  const [c] = await admin<{ id: string }[]>`
+    insert into public.contacts (workspace_id, name, phone_e164, owner_id)
+    values (${workspaceId}, ${name}, ${uniquePhone()}, ${ownerId}) returning id`;
+  return c.id;
+}
+
+/** A stage (stages.workspace_id is required in the core schema). */
+export async function stage(workspaceId: string, pipelineId: string, name: string, position = 0, kind = 'open'): Promise<string> {
+  const [s] = await admin<{ id: string }[]>`
+    insert into public.stages (workspace_id, pipeline_id, name, position, kind)
+    values (${workspaceId}, ${pipelineId}, ${name}, ${position}, ${kind}) returning id`;
+  return s.id;
 }

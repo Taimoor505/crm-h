@@ -158,7 +158,7 @@ paths:
         '401': { description: 'Bad or missing signature' }
         '403': { description: 'Origin not allowed' }
         '404': { description: 'Unknown or inactive source' }
-        '422': { description: 'No usable phone or email (codes: invalid_phone, missing_contact_details)' }
+        '422': { description: 'No usable phone number (codes: invalid_phone, missing_phone)' }
         '429': { description: 'Rate limited' }
     options:
       tags: [Lead capture]

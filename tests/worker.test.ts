@@ -11,7 +11,7 @@ import { enqueue } from '@/server/queue';
 import { logActivity } from '@/server/core/contacts';
 import { processJobs, HANDLERS } from '@/worker/jobs';
 import { runSchedulerTick, SCHEDULE } from '@/worker/scheduler';
-import { admin, call, minutesFromNow, team } from './helpers';
+import { admin, call, createUser, minutesFromNow, team } from './helpers';
 
 let t: Awaited<ReturnType<typeof team>>;
 let key: string;
@@ -148,6 +148,28 @@ describe('job queue', () => {
     }
   });
 
+  it("picks up events Taimoor's code writes to domain_events", async () => {
+    await admin`delete from public.jobs`;
+    const [ev] = await admin`
+      insert into public.domain_events (workspace_id, event_name, payload)
+      values (${t.ws}, 'deal.lost', ${admin.json({ deal_id: 'x', lost_reason: 'Budget' })}) returning id`;
+    const [job] = await admin`select name, payload, workspace_id, dedupe_key from public.jobs`;
+    expect(job).toMatchObject({ name: 'deal.lost', workspace_id: t.ws, dedupe_key: `domain_event:${ev.id}` });
+    expect(job.payload).toEqual({ deal_id: 'x', lost_reason: 'Budget' });
+    expect(await processJobs('w')).toEqual({ processed: 1, failed: 0 });
+  });
+
+  it("lets a partner admin into their client's workspace as a manager (Taimoor's partner_admin_of)", async () => {
+    const [w] = await admin`select partner_id from public.workspaces where id = ${t.ws}`;
+    const pa = await createUser('Partner Admin');
+    await admin`update public.users set partner_admin_of = ${w.partner_id} where id = ${pa}`;
+    const res = await call(summary.GET, { as: pa, ws: t.ws, query: { scope: 'team' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.me.role).toBe('manager');
+    const stranger = await createUser('Not an admin');
+    expect((await call(summary.GET, { as: stranger, ws: t.ws })).status).toBe(403);
+  });
+
   it('marks events nobody handles yet as done', async () => {
     await admin`delete from public.jobs`;
     await withService((tx) => enqueue(tx, 'deal.won', { deal_id: 'x' }));
@@ -172,7 +194,7 @@ describe('GET /home/summary', () => {
     await withUser(h.ali, (tx) => logActivity(tx, { workspaceId: h.ws, contactId: responded, type: 'call', actorId: h.ali }));
     await call(tasks.POST, { method: 'POST', as: h.ali, ws: h.ws, body: { type: 'call', title: 'Late', due_at: minutesFromNow(-30) } });
     await call(tasks.POST, { method: 'POST', as: h.ali, ws: h.ws, body: { type: 'call', title: 'Later', due_at: minutesFromNow(5 * 24 * 60) } });
-    await admin`insert into public.contacts (workspace_id, phone_e164, source, last_enquiry_at) values (${h.ws}, '+923009000004', 'website', now())`;
+    await admin`insert into public.contacts (workspace_id, name, phone_e164, source, last_enquiry_at) values (${h.ws}, 'Unassigned', '+923009000004', 'website', now())`;
 
     const res = await call(summary.GET, { as: h.ali, ws: h.ws });
     expect(res.status).toBe(200);
