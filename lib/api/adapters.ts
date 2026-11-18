@@ -146,6 +146,7 @@ export function adaptDeal(d: Raw): Deal {
     stage_entered_at: d.stage_entered_at ?? d.created_at,
     // TODO(backend): deals list doesn't join the next open task yet.
     next_task_due_at: d.next_task_due_at ?? null,
+    contact: d.contact ?? null,
     created_at: d.created_at,
     updated_at: d.updated_at ?? d.created_at,
   };

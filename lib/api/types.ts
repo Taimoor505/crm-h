@@ -145,6 +145,8 @@ export interface Deal {
   custom: Record<string, unknown>;
   stage_entered_at: string;
   next_task_due_at: string | null;
+  /** TODO(backend): not joined by the sandbox deals list yet. */
+  contact: { id: string; name: string; phone_e164: string } | null;
   created_at: string;
   updated_at: string;
 }

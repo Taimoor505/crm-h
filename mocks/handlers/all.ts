@@ -48,7 +48,8 @@ function dealOut(db: MockDb, d: MDeal) {
     .filter((t) => t.status === 'open' && (t.deal_id === d.id || t.contact_id === d.contact_id))
     .sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
   // value_pkr kept for parity with the sandbox shape.
-  return { ...rest, value_pkr: d.value_minor / 100, next_task_due_at: next?.due_at ?? null };
+  const c = db.contacts.find((x) => x.id === d.contact_id);
+  return { ...rest, value_pkr: d.value_minor / 100, next_task_due_at: next?.due_at ?? null, contact: c ? { id: c.id, name: c.name, phone_e164: c.phone_e164 } : null };
 }
 
 function taskOut(db: MockDb, t: MTask) {
