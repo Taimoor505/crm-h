@@ -159,8 +159,12 @@ export async function registerInboundContact(tx: Db, contactId: string): Promise
     body: 'New lead via WhatsApp',
     meta: { kind: 'lead_received', source_label: 'whatsapp', counts_as_response: false },
   });
-  if (!contact.owner_id) {
-    await routeLead(tx, { contact, isReenquiry: false, sourceLabel: 'whatsapp', sourceName: 'WhatsApp' });
-  }
+  const ownerId = contact.owner_id
+    ?? (await routeLead(tx, { contact, isReenquiry: false, sourceLabel: 'whatsapp', sourceName: 'WhatsApp' }));
+  // Same event as other sources, so automations (welcome, auto follow-up) apply.
+  await enqueue(tx, 'lead.received', {
+    contact_id: contact.id, workspace_id: contact.workspace_id, status: 'created',
+    source_label: 'whatsapp', lead_source_id: null, owner_id: ownerId,
+  }, { workspaceId: contact.workspace_id, dedupeKey: `lead.received:contact:${contact.id}` });
   return true;
 }

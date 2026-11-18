@@ -2,13 +2,18 @@ import { withService, type Tx } from '../server/db';
 import { claimJobs, completeJob, failJob, type Job } from '../server/queue';
 import { registerInboundContact } from '../server/leads/ingest';
 import { fetchMetaLead } from '../server/leads/meta';
+import { runAutomationsForEvent } from '../server/automations/engine';
 import { deliverNotification, dispatchNotification } from '../server/notifications/dispatch';
 
 type Handler = (tx: Tx, job: Job) => Promise<void>;
 
+const automations: Handler = async (tx, job) => {
+  await runAutomationsForEvent(tx, job);
+};
+
 /**
- * Event and job handlers. Events nobody handles yet (deal.won etc. are for the
- * automations in weeks 9-10) are marked done so the queue stays clean.
+ * Event and job handlers. Events with no handler (e.g. contact.updated) are
+ * marked done so the queue stays clean.
  */
 export const HANDLERS: Record<string, Handler> = {
   // Taimoor's WhatsApp webhook creates contacts for new inbound numbers; those
@@ -16,6 +21,10 @@ export const HANDLERS: Record<string, Handler> = {
   'contact.created': async (tx, job) => {
     await registerInboundContact(tx, String(job.payload.contact_id));
   },
+  'lead.received': automations,
+  'call.logged': automations,
+  'deal.stage_changed': automations,
+  'deal.won': automations,
   'meta.fetch_lead': async (tx, job) => {
     await fetchMetaLead(tx, String(job.payload.lead_event_id));
   },

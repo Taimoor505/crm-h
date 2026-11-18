@@ -3,6 +3,7 @@ import { reassignUntouchedLeads } from '../server/assignment/reassign';
 import {
   sendOverdueAlerts, sendOverdueDigests, sendTaskReminders, sendUntouchedLeadAlerts,
 } from '../server/followups/alerts';
+import { runStaleDealAlerts } from '../server/automations/engine';
 
 export interface ScheduledJob {
   key: string;
@@ -24,6 +25,7 @@ export const SCHEDULE: ScheduledJob[] = [
   { key: 'tasks.overdue_alerts', everyMinutes: 5, run: (tx) => sendOverdueAlerts(tx) },
   { key: 'leads.untouched_alerts', everyMinutes: 1, run: (tx) => sendUntouchedLeadAlerts(tx) },
   { key: 'digest.overdue', everyMinutes: 15, run: (tx) => sendOverdueDigests(tx) },
+  { key: 'automations.stale_deals', everyMinutes: 60, run: (tx) => runStaleDealAlerts(tx) },
   {
     key: 'jobs.recover_stale',
     everyMinutes: 5,
