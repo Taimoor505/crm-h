@@ -12,6 +12,7 @@ import * as adminConfirm from '@/app/api/v1/admin/payments/[id]/confirm/route';
 import * as adminExtend from '@/app/api/v1/admin/trials/[id]/extend/route';
 import * as adminRun from '@/app/api/v1/admin/billing/run/route';
 import * as tasks from '@/app/api/v1/tasks/route';
+import * as readNotifications from '@/app/api/v1/notifications/read/route';
 import { closeDb, withService } from '@/server/db';
 import { setStorageDriver } from '@/server/storage';
 import { enforceBilling } from '@/server/billing/access';
@@ -268,6 +269,12 @@ describe('unpaid invoices, payments and suspension', () => {
     expect((await call(tasks.GET, { as: owner, ws: p.ws[0] })).status).toBe(200);
     const [n] = await admin`select title, priority from public.notifications where user_id = ${owner} and type = 'billing.read_only'`;
     expect(n).toEqual({ title: 'Your CRM is read-only: invoice unpaid', priority: 'urgent' });
+    // Personal actions still work while read-only.
+    expect((await call(readNotifications.POST, { method: 'POST', as: owner, ws: p.ws[0], body: { all: true } })).status).toBe(200);
+    // A workspace the partner adds now is read-only too.
+    const late = await clientWorkspace(p.id, 'Late Payers client 2');
+    await withService(enforceBilling);
+    expect((await admin`select status from public.workspaces where id = ${late}`)[0].status).toBe('read_only');
 
     await admin`update public.partner_invoices set issue_date = current_date - 31 where id = ${invoiceId}`;
     expect(await withService(enforceBilling)).toMatchObject({ archived: 1 });
@@ -310,7 +317,7 @@ describe('unpaid invoices, payments and suspension', () => {
 
   it('suspension blocks everything until lifted; the admin list shows it', async () => {
     const res = await call(adminSuspend.POST, { method: 'POST', ...asAdmin(), params: { id: p.id }, body: { suspended: true, reason: 'chargeback' } });
-    expect(res.body.data).toMatchObject({ suspended: true, workspaces: 1 });
+    expect(res.body.data).toMatchObject({ suspended: true, workspaces: 2 });
     expect((await call(tasks.GET, { as: owner, ws: p.ws[0] })).body.error.code).toBe('workspace_suspended');
 
     const list = await call(adminPartners.GET, { ...asAdmin(), query: { status: 'suspended' } });

@@ -63,6 +63,14 @@ export async function enforceBilling(tx: Tx): Promise<{ overdue: number; read_on
       });
     }
   }
+  // Workspaces created after their subscription was restricted follow it too.
+  const restricted = await tx<Subscription[]>`
+    select * from public.subscriptions where status in ('read_only', 'archived')`;
+  for (const s of restricted) {
+    const ids = await controlledWorkspaceIds(tx, s);
+    await tx`update public.workspaces set status = ${s.status}
+              where id = any(${ids}::uuid[]) and status = 'active'`;
+  }
   return { overdue: overdue.count, read_only: toReadOnly.length, archived: toArchive.length };
 }
 

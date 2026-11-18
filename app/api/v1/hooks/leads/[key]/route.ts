@@ -44,6 +44,18 @@ function originAllowed(source: LeadSource, origin: string): boolean {
   return allowed.length === 0 || allowed.includes(origin);
 }
 
+/**
+ * Visitor IP for rate limiting. Hosting proxies (Vercel, Cloud Run, nginx)
+ * set x-real-ip, or append the real client as the LAST x-forwarded-for entry;
+ * the first entry is whatever the client sent, so it can't be trusted.
+ */
+function clientIp(req: Request): string | null {
+  const real = req.headers.get('x-real-ip')?.trim();
+  if (real) return real;
+  const chain = (req.headers.get('x-forwarded-for') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return chain[chain.length - 1] ?? null;
+}
+
 function parseBody(raw: string, contentType: string): Record<string, unknown> {
   if (!raw) return {};
   if (contentType.includes('application/x-www-form-urlencoded')) {
@@ -86,7 +98,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
 
     const contentType = req.headers.get('content-type') ?? '';
     const payload = parseBody(raw, contentType);
-    const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || null;
+    const ip = clientIp(req);
     const headers = Object.fromEntries(KEPT_HEADERS.map((h) => [h, req.headers.get(h)]).filter(([, v]) => v));
     const wantsRedirect = source.type === 'website_form' && contentType.includes('form-urlencoded')
       && !!source.settings.redirect_url;

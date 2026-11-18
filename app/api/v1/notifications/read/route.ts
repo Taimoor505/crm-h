@@ -7,7 +7,7 @@ const schema = z.union([
 ]);
 
 // POST /notifications/read: { ids: [...] } or { all: true }.
-export const POST = userRoute({}, async ({ req, tx, workspace, userId }) => {
+export const POST = userRoute({ allowWhenReadOnly: true }, async ({ req, tx, workspace, userId }) => {
   const body = await readJson(req, schema);
   const ids = 'ids' in body ? body.ids : null;
   const updated = await tx`

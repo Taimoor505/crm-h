@@ -13,7 +13,7 @@ const subscribeSchema = z.object({
  * The same endpoint re-registered (e.g. after a different user logs in on the
  * same device) moves to the caller.
  */
-export const POST = userRoute({}, async ({ req, tx, userId }) => {
+export const POST = userRoute({ allowWhenReadOnly: true }, async ({ req, tx, userId }) => {
   const body = await readJson(req, subscribeSchema);
   // The endpoint may belong to another user's row (shared device); RLS would hide it.
   await elevate(tx);
@@ -30,7 +30,7 @@ export const POST = userRoute({}, async ({ req, tx, userId }) => {
 const unsubscribeSchema = z.object({ endpoint: z.url().max(2000) });
 
 // DELETE /push-subscriptions: forget this browser (on logout).
-export const DELETE = userRoute({}, async ({ req, tx, userId }) => {
+export const DELETE = userRoute({ allowWhenReadOnly: true }, async ({ req, tx, userId }) => {
   const body = await readJson(req, unsubscribeSchema);
   const r = await tx`delete from public.push_subscriptions where endpoint = ${body.endpoint} and user_id = ${userId}`;
   return json({ data: { removed: r.count } });

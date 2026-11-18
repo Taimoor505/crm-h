@@ -79,10 +79,15 @@ const uuid = z.uuid();
  *  - verifies the Supabase access token
  *  - resolves X-Workspace-Id and the caller's active membership
  *  - runs the handler in one transaction as that user (RLS enforced)
- *  - blocks writes when the workspace is read-only (unpaid billing)
+ *  - blocks writes when the workspace is read-only or archived (unpaid
+ *    billing), and everything when it is suspended
  */
 export function userRoute<P = Record<string, string>>(
-  opts: { managerOnly?: boolean },
+  opts: {
+    managerOnly?: boolean;
+    /** Personal actions (mark read, availability, settings) still work when unpaid. */
+    allowWhenReadOnly?: boolean;
+  },
   handler: (c: UserCtx<P>) => Promise<Response>,
 ): NextHandler<P> {
   return async (req, ctx) => {
@@ -107,7 +112,7 @@ export function userRoute<P = Record<string, string>>(
         if (m.status === 'suspended') {
           throw new ApiError(403, 'workspace_suspended', 'This workspace is suspended; contact support');
         }
-        if (req.method !== 'GET' && m.status !== 'active') {
+        if (req.method !== 'GET' && m.status !== 'active' && !opts.allowWhenReadOnly) {
           throw new ApiError(403, 'workspace_read_only', `Workspace is ${m.status}; changes are disabled`);
         }
         return handler({

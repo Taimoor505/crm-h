@@ -9,7 +9,7 @@ const schema = z.object({
 
 // PUT /availability: "I'm off today". Unavailable agents are skipped by
 // round-robin and by-source assignment, and by auto-reassign.
-export const PUT = userRoute({}, async ({ req, tx, workspace, userId }) => {
+export const PUT = userRoute({ allowWhenReadOnly: true }, async ({ req, tx, workspace, userId }) => {
   const body = await readJson(req, schema);
   const target = body.user_id ?? userId;
   // RLS lets agents write only their own row; managers anyone's.

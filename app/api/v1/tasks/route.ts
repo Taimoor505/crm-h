@@ -33,8 +33,8 @@ export const GET = userRoute({}, async ({ req, tx, workspace, userId, isManager 
     cursor && tx`(t.due_at, t.id) > (${cursor.d}::timestamptz, ${cursor.id}::uuid)`,
   ]);
 
-  const rows = await tx<(Task & { contact: unknown; is_overdue: boolean })[]>`
-    select ${taskSelect(tx)}
+  const rows = await tx<(Task & { contact: unknown; is_overdue: boolean; due_at_text: string })[]>`
+    select ${taskSelect(tx)}, t.due_at::text as due_at_text
       from public.tasks t
       left join public.contacts c on c.id = t.contact_id
      where ${where}
@@ -44,10 +44,9 @@ export const GET = userRoute({}, async ({ req, tx, workspace, userId, isManager 
   const page = rows.slice(0, q.limit);
   const last = page[page.length - 1];
   return json({
-    data: page,
-    next_cursor: rows.length > q.limit && last
-      ? encodeCursor({ d: new Date(last.due_at).toISOString(), id: last.id })
-      : null,
+    data: page.map(({ due_at_text: _t, ...task }) => task),
+    // Postgres text keeps microseconds, so the cursor never skips or repeats a row.
+    next_cursor: rows.length > q.limit && last ? encodeCursor({ d: last.due_at_text, id: last.id }) : null,
   });
 });
 

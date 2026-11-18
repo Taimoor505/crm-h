@@ -35,7 +35,7 @@ async function present(tx: Db, workspaceId: string, userId: string) {
 }
 
 // GET /notification-settings: the caller's channels per event type.
-export const GET = userRoute({}, async ({ tx, workspace, userId }) =>
+export const GET = userRoute({ allowWhenReadOnly: true }, async ({ tx, workspace, userId }) =>
   json({ data: await present(tx, workspace.id, userId) }));
 
 const eventKeys = Object.keys(EVENT_TYPES) as [string, ...string[]];
@@ -49,7 +49,7 @@ const putSchema = z.object({
 });
 
 // PUT /notification-settings: partial update; only the given event types change.
-export const PUT = userRoute({}, async ({ req, tx, workspace, userId }) => {
+export const PUT = userRoute({ allowWhenReadOnly: true }, async ({ req, tx, workspace, userId }) => {
   const body = await readJson(req, putSchema);
   let number: string | null | undefined = undefined;
   if (body.whatsapp_number !== undefined) {
