@@ -1,0 +1,66 @@
+'use client';
+
+import Link from 'next/link';
+import { useTranslations } from 'next-intl';
+import { ArrowRight, CalendarClock } from 'lucide-react';
+import type { Deal, Stage } from '@/lib/api/types';
+import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
+import { daysSince, isOverdue } from '@/lib/format';
+import { MoneyText, RelativeTime } from './values';
+import { OwnerAvatar } from './badges';
+import { cn } from '@/lib/utils';
+
+/** Contact, value, owner, days in stage, next follow-up (brief §8.5). */
+export function DealCard({
+  deal, ownerName, nextStage, onMoveNext, dragging, className,
+}: {
+  deal: Deal;
+  ownerName: string | null;
+  nextStage?: Stage | null;
+  onMoveNext?: () => void;
+  dragging?: boolean;
+  className?: string;
+}) {
+  const t = useTranslations('deal');
+  const p = useTranslations('pipeline');
+  const s = useWorkspaceSettings();
+  const days = daysSince(deal.stage_entered_at, s.timezone);
+  const overdue = deal.next_task_due_at ? isOverdue(deal.next_task_due_at) : false;
+
+  return (
+    <div className={cn('rounded-lg border bg-white p-3 shadow-card', dragging && 'rotate-1 shadow-float ring-2 ring-brand', className)}>
+      <div className="flex items-start justify-between gap-2">
+        <Link href={`/contacts/${deal.contact_id}`} className="min-w-0 flex-1" onPointerDown={(e) => e.stopPropagation()}>
+          <p className="truncate text-sm font-semibold text-gray-900 hover:underline">{deal.contact?.name ?? deal.title}</p>
+          {deal.contact && <p className="truncate text-xs text-gray-600">{deal.title}</p>}
+        </Link>
+        <OwnerAvatar userId={deal.owner_id} name={ownerName} />
+      </div>
+      <MoneyText value={deal.value} className="mt-2 block font-heading text-base font-bold text-brand-ink" />
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+        <span>{t('daysInStage', { count: days })}</span>
+        <span className={cn('inline-flex items-center gap-1', overdue && 'font-semibold text-red-700')}>
+          <CalendarClock className="size-3" aria-hidden="true" />
+          {deal.next_task_due_at ? (
+            <>
+              {overdue && <span>{p('overdue')} ·</span>}
+              <RelativeTime iso={deal.next_task_due_at} />
+            </>
+          ) : (
+            t('noFollowUp')
+          )}
+        </span>
+      </div>
+      {nextStage && onMoveNext && (
+        <button
+          type="button"
+          onClick={onMoveNext}
+          className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-brand/40 bg-brand-surface text-sm font-medium text-brand-ink hover:bg-brand-surface/70"
+        >
+          {p('moveNext', { stage: nextStage.name })}
+          <ArrowRight className="size-4 rtl:rotate-180" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+}

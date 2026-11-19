@@ -6,3 +6,10 @@ coverage/
 .env*
 !.env.example
 *.tsbuildinfo
+
+# Generated PWA service worker
+public/sw.js
+public/sw.js.map
+public/swe-worker*.js
+test-results/
+playwright-report/
