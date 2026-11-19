@@ -78,7 +78,7 @@ function Panel() {
   }
 
   return (
-    <div className="fixed start-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 lg:bottom-4">
+    <div className="fixed start-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 lg:start-20 lg:bottom-4">
       {open ? (
         <div className="w-72 rounded-xl border bg-white p-3 text-xs shadow-float">
           <div className="mb-2 flex items-center justify-between">

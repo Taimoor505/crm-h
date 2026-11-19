@@ -20,9 +20,8 @@ export function CallButton({ contactId, name, phone, taskId, dealId, label, clas
   return (
     <a
       href={`tel:${phone}`}
-      onClick={(e) => {
+      onClick={() => {
         if (!canWrite) return;
-        e.preventDefault();
         countUsefulAction();
         startCall({ contactId, contactName: name, phone, taskId, dealId });
       }}

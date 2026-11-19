@@ -25,8 +25,8 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1366, height: 860 } } },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000/login',
+    command: `node --max-old-space-size=6144 node_modules/next/dist/bin/next dev -H 127.0.0.1 -p ${process.env.E2E_PORT ?? 3000}`,
+    url: `${process.env.E2E_BASE_URL ?? 'http://localhost:3000'}/login`,
     reuseExistingServer: true,
     timeout: 180_000,
     env: { NEXT_PUBLIC_API_MOCKING: 'all' },

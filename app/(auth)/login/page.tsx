@@ -75,7 +75,8 @@ function Login() {
     meta: { silent: true },
     onSuccess: (r) => {
       signIn(r);
-      router.replace(r.memberships.length ? safeNext : '/onboarding');
+      // The app gate sends people without a workspace to onboarding (or partners to /partner).
+      router.replace(safeNext);
     },
   });
 

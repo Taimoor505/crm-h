@@ -42,12 +42,12 @@ const nextConfig: NextConfig = {
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {
     // Test artifacts written during e2e runs must not trigger dev recompiles/reloads.
+    // Keep Next's own exclusions (.next, node_modules, .git): watching .next makes the
+    // dev server rebuild in a loop until it runs out of memory.
     if (dev) {
-      const prev = config.watchOptions?.ignored;
-      const list = Array.isArray(prev) ? prev : prev ? [prev] : [];
       config.watchOptions = {
         ...config.watchOptions,
-        ignored: [...list.filter((x: unknown) => typeof x === 'string' && x.length > 0), '**/node_modules/**', '**/.git/**', '**/test-results/**', '**/playwright-report/**'],
+        ignored: /[\\/](?:\.git|\.next|node_modules|test-results|playwright-report)(?:[\\/]|$)/,
       };
     }
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
