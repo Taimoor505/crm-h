@@ -4,7 +4,8 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
-import { ArrowLeft, Mail, MessageCircle } from 'lucide-react';
+import { ArrowLeft, CalendarCheck, Mail, MessageCircle, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
+import { AuthShell } from '@/components/layout/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { PhoneInput, toPhoneValue, type PhoneValue } from '@/components/crm/PhoneInput';
@@ -33,6 +34,7 @@ export default function LoginPage() {
 
 function Login() {
   const t = useTranslations('auth');
+  const p = useTranslations('authPanel');
   const e = useTranslations('errors');
   const { branding } = useBranding();
   const { session, hydrated, signIn } = useSession();
@@ -84,22 +86,23 @@ function Login() {
   const sendError = send.error ? (isApiError(send.error) && send.error.status === 429 ? t('tooMany') : send.error.message) : null;
 
   return (
-    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background sm:justify-center">
-      {/* Soft brand glow behind the card (brand color only, via variables). */}
-      <div aria-hidden="true" className="pointer-events-none absolute -top-40 start-1/2 size-[36rem] -translate-x-1/2 rounded-full bg-brand opacity-[0.12] blur-3xl rtl:translate-x-1/2" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 -end-32 size-[28rem] rounded-full bg-brand-accent opacity-[0.10] blur-3xl" />
-      <main className="animate-rise relative mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-10 sm:my-12 sm:flex-none sm:rounded-[28px] sm:bg-card sm:px-10 sm:py-12 sm:shadow-float">
-        <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          {branding.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={branding.logoUrl} alt="" className="size-14 rounded-2xl object-contain" />
-          ) : (
-            <span aria-hidden="true" className="grid size-16 place-items-center rounded-[20px] bg-brand font-heading text-2xl font-bold text-on-brand shadow-raised">
-              {branding.logoText.slice(0, 2)}
-            </span>
-          )}
-          <h1 className="font-heading text-[26px] font-bold tracking-tight text-gray-900">{t('welcome', { app: branding.appName })}</h1>
-          {branding.tagline && <p className="text-sm text-gray-600">{branding.tagline}</p>}
+    <AuthShell
+      panelTitle={branding.tagline || t('welcome', { app: branding.appName })}
+      points={[
+        { icon: <Zap className="size-5" />, title: p('point1Title'), body: p('point1') },
+        { icon: <CalendarCheck className="size-5" />, title: p('point2Title'), body: p('point2') },
+        { icon: <TrendingUp className="size-5" />, title: p('point3Title'), body: p('point3') },
+      ]}
+      footnote={
+        <span className="flex items-center gap-2">
+          <ShieldCheck className="size-4" aria-hidden="true" />
+          {p('secure')}
+        </span>
+      }
+    >
+      <div className="animate-rise mx-auto w-full max-w-[26rem]">
+        <div className="mb-8">
+          <h1 className="font-heading text-[28px] font-bold tracking-tight text-gray-900 sm:text-[32px]">{t('welcome', { app: branding.appName })}</h1>
         </div>
 
         {step === 'phone' ? (
@@ -140,9 +143,9 @@ function Login() {
         )}
 
         {(branding.supportWhatsapp || branding.supportEmail) && (
-          <div className="mt-10 text-center text-sm text-gray-600">
+          <div className="mt-10 border-t pt-6 text-sm text-gray-600">
             <p>{t('needHelp')}</p>
-            <div className="mt-2 flex justify-center gap-4">
+            <div className="mt-1 flex flex-wrap gap-x-5">
               {branding.supportWhatsapp && (
                 <a href={waLink(branding.supportWhatsapp)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-1.5 font-medium text-brand-ink hover:underline">
                   <MessageCircle className="size-4" aria-hidden="true" />
@@ -158,8 +161,8 @@ function Login() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AuthShell>
   );
 }
 

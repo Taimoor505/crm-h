@@ -44,7 +44,7 @@ export function RegionFields({ value, onChange, idPrefix = 'region', extended }:
           id={`${idPrefix}-tz`}
           value={value.timezone}
           onChange={(e) => onChange({ ...value, timezone: e.target.value })}
-          className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+          className="h-11 w-full appearance-none rounded-xl border border-input bg-card bg-[length:16px] bg-[position:right_0.75rem_center] bg-no-repeat px-3 pe-9 text-sm shadow-xs [background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%236b7280%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E&quot;)] rtl:bg-[position:left_0.75rem_center]"
         >
           {zones.map((z) => (
             <option key={z} value={z}>
