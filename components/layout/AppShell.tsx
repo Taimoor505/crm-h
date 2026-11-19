@@ -36,7 +36,7 @@ function BrandMark({ size = 'md' }: { size?: 'sm' | 'md' }) {
     // eslint-disable-next-line @next/next/no-img-element
     <img src={branding.logoUrl} alt="" className={cn(box, 'rounded-lg object-contain')} />
   ) : (
-    <span aria-hidden="true" className={cn(box, 'grid shrink-0 place-items-center rounded-lg bg-brand font-heading font-bold text-on-brand')}>
+    <span aria-hidden="true" className={cn(box, 'grid shrink-0 place-items-center rounded-xl bg-brand font-heading font-bold text-on-brand shadow-card')}>
       {branding.logoText.slice(0, 2)}
     </span>
   );
@@ -132,8 +132,8 @@ function Sidebar({ items }: { items: NavItem[] }) {
   const { branding } = useBranding();
   const { canWrite } = usePermissions();
   return (
-    <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e bg-white lg:flex">
-      <div className="flex items-center gap-3 px-4 py-4">
+    <aside className="sticky top-0 hidden h-dvh w-72 shrink-0 flex-col border-e bg-card lg:flex">
+      <div className="flex h-16 items-center gap-3 px-5">
         <BrandMark />
         <div className="min-w-0">
           <p className="truncate font-heading text-sm font-semibold">{branding.appName}</p>
@@ -141,18 +141,18 @@ function Sidebar({ items }: { items: NavItem[] }) {
         </div>
       </div>
       {canWrite && (
-        <div className="px-3 pb-2">
+        <div className="px-4 pt-2 pb-4">
           <button
             type="button"
             onClick={() => openQuickAdd()}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-brand-accent text-sm font-semibold text-on-brand-accent shadow-card hover:opacity-95"
+            className="press flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-accent text-sm font-semibold text-on-brand-accent shadow-raised transition-shadow hover:shadow-float"
           >
             <Plus className="size-4" aria-hidden="true" />
             {s('addLead')}
           </button>
         </div>
       )}
-      <nav aria-label={t('mainNav')} className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
+      <nav aria-label={t('mainNav')} className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
         {items.map((item) => {
           const active = isActive(item, pathname);
           return (
@@ -161,11 +161,11 @@ function Sidebar({ items }: { items: NavItem[] }) {
               href={item.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium',
-                active ? 'bg-brand-surface text-brand-ink' : 'text-gray-700 hover:bg-gray-100',
+                'flex h-12 items-center gap-3 rounded-full px-4 text-sm transition-colors',
+                active ? 'bg-brand-surface font-semibold text-brand-ink' : 'font-medium text-gray-700 hover:bg-gray-100',
               )}
             >
-              <item.icon className="size-4" aria-hidden="true" />
+              <item.icon className="size-5" aria-hidden="true" />
               {t(item.key)}
             </Link>
           );
@@ -178,7 +178,8 @@ function Sidebar({ items }: { items: NavItem[] }) {
 function TopBar() {
   const { branding } = useBranding();
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-white/95 px-2 backdrop-blur lg:px-6">
+    <header className="sticky top-0 z-30 border-b bg-card/90 backdrop-blur-md">
+      <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-2 px-2 lg:px-8">
       <div className="flex min-w-0 flex-1 items-center gap-2 ps-2 lg:hidden">
         <BrandMark size="sm" />
         <div className="min-w-0">
@@ -194,6 +195,7 @@ function TopBar() {
       </div>
       <NotificationBell />
       <UserMenu />
+      </div>
     </header>
   );
 }
@@ -208,7 +210,7 @@ function BottomNav({ items }: { items: NavItem[] }) {
 
   return (
     <>
-      <nav aria-label={t('mainNav')} className="fixed inset-x-0 bottom-0 z-40 border-t bg-white pb-safe lg:hidden">
+      <nav aria-label={t('mainNav')} className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 pb-safe backdrop-blur-md lg:hidden">
         <ul className="flex">
           {primary.map((item) => {
             const active = isActive(item, pathname);
@@ -217,9 +219,9 @@ function BottomNav({ items }: { items: NavItem[] }) {
                 <Link
                   href={item.href}
                   aria-current={active ? 'page' : undefined}
-                  className={cn('flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium', active ? 'text-brand-ink' : 'text-gray-600')}
+                  className={cn('press flex min-h-16 flex-col items-center justify-center gap-1 text-[11px]', active ? 'font-semibold text-brand-ink' : 'font-medium text-gray-600')}
                 >
-                  <span className={cn('grid h-7 w-12 place-items-center rounded-full', active && 'bg-brand-surface')}>
+                  <span className={cn('grid h-8 w-14 place-items-center rounded-full transition-colors duration-300', active ? 'bg-brand-surface' : 'bg-transparent')}>
                     <item.icon className="size-5" aria-hidden="true" />
                   </span>
                   <span className="max-w-full truncate px-0.5">{t(item.key)}</span>
@@ -232,9 +234,9 @@ function BottomNav({ items }: { items: NavItem[] }) {
               <button
                 type="button"
                 onClick={() => setMoreOpen(true)}
-                className={cn('flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium', moreActive ? 'text-brand-ink' : 'text-gray-600')}
+                className={cn('press flex min-h-16 w-full flex-col items-center justify-center gap-1 text-[11px]', moreActive ? 'font-semibold text-brand-ink' : 'font-medium text-gray-600')}
               >
-                <span className={cn('grid h-7 w-12 place-items-center rounded-full', moreActive && 'bg-brand-surface')}>
+                <span className={cn('grid h-8 w-14 place-items-center rounded-full transition-colors duration-300', moreActive ? 'bg-brand-surface' : 'bg-transparent')}>
                   <MoreHorizontal className="size-5" aria-hidden="true" />
                 </span>
                 {t('more')}
@@ -244,18 +246,18 @@ function BottomNav({ items }: { items: NavItem[] }) {
         </ul>
       </nav>
       <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
+        <SheetContent side="bottom" className="rounded-t-[28px] border-0 pb-safe">
           <SheetHeader>
             <SheetTitle>{t('more')}</SheetTitle>
             <SheetDescription className="sr-only">{t('more')}</SheetDescription>
           </SheetHeader>
-          <ul className="grid grid-cols-3 gap-2 px-4 pb-6">
+          <ul className="stagger grid grid-cols-3 gap-3 px-4 pb-6">
             {rest.map((item) => (
               <li key={item.key}>
                 <Link
                   href={item.href}
                   onClick={() => setMoreOpen(false)}
-                  className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border bg-white text-sm font-medium text-gray-800 hover:bg-gray-50"
+                  className="press flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl bg-brand-surface/60 text-sm font-medium text-gray-800 hover:bg-brand-surface"
                 >
                   <item.icon className="size-6 text-brand-ink" aria-hidden="true" />
                   {t(item.key)}
@@ -281,7 +283,7 @@ function AddLeadFab() {
       type="button"
       onClick={() => openQuickAdd()}
       aria-label={t('addLead')}
-      className="fixed end-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 items-center gap-2 rounded-full bg-brand-accent px-5 font-semibold text-on-brand-accent shadow-float lg:hidden"
+      className="press animate-rise fixed end-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 items-center gap-2 rounded-2xl bg-brand-accent px-5 font-semibold text-on-brand-accent shadow-float lg:hidden"
     >
       <Plus className="size-5" aria-hidden="true" />
       <span>{t('addLead')}</span>
@@ -310,7 +312,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <ReadOnlyBanner />
         <OfflineBanner />
         <TopBar />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-[calc(9rem+env(safe-area-inset-bottom))] lg:px-8 lg:pt-6 lg:pb-10">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-5 pb-[calc(10rem+env(safe-area-inset-bottom))] lg:px-8 lg:pt-8 lg:pb-12">
           {hidden ? null : children}
         </main>
       </div>

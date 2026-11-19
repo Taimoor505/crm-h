@@ -61,7 +61,7 @@ function FieldList({ entity, fields, onAdd }: { entity: 'contact' | 'deal'; fiel
       }
     >
       {fields.length ? (
-        <ul className="divide-y divide-gray-100">
+        <ul className="stagger divide-y divide-gray-100">
           {fields.map((f, i) => (
             <li key={f.id} className={cn('flex items-center gap-2 py-2', f.hidden && 'opacity-60')}>
               <div className="flex flex-col">

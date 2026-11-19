@@ -34,7 +34,7 @@ export default function ConversationPage({ params }: { params: Promise<{ convers
   const { conversationId } = use(params);
   return (
     <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
-      <div className="hidden overflow-hidden rounded-xl border bg-card shadow-card lg:block lg:h-[calc(100dvh-7.5rem)]">
+      <div className="hidden overflow-hidden rounded-2xl border bg-card shadow-card lg:block lg:h-[calc(100dvh-7.5rem)]">
         <InboxList activeId={conversationId} />
       </div>
       <Chat id={conversationId} />
@@ -207,7 +207,7 @@ function TemplatesSheet({ name, onClose, onUse }: { name: string; onClose: () =>
       {templates.isLoading ? (
         <ListSkeleton rows={3} />
       ) : (
-        <ul className="space-y-2">
+        <ul className="stagger space-y-2">
           {(templates.data ?? []).map((tpl) => (
             <li key={tpl.name} className="rounded-lg border p-3">
               <p className="font-mono text-xs text-gray-500">{tpl.name}</p>

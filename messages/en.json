@@ -387,7 +387,9 @@
     "colCalls": "Calls",
     "colDone": "Follow-ups done",
     "colUntouched": "Untouched",
-    "untouchedHigh": "{count} untouched leads"
+    "untouchedHigh": "{count} untouched leads",
+    "colDoneShort": "Done",
+    "colUntouchedShort": "Waiting"
   },
   "regionFields": {
     "sqft": "Square feet",

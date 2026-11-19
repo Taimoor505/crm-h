@@ -148,7 +148,7 @@ function StagesEditor({ pipeline }: { pipeline: Pipeline }) {
     <SettingsCard title={t('stages')}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={order.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <ul className="space-y-2">
+          <ul className="stagger space-y-2">
             {order.map((s) => (
               <SortableStage
                 key={s.id}

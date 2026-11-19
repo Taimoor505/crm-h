@@ -84,19 +84,21 @@ function Login() {
   const sendError = send.error ? (isApiError(send.error) && send.error.status === 429 ? t('tooMany') : send.error.message) : null;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-white">
-      <div className="h-1.5 bg-brand" aria-hidden="true" />
-      <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-10">
+    <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background sm:justify-center">
+      {/* Soft brand glow behind the card (brand color only, via variables). */}
+      <div aria-hidden="true" className="pointer-events-none absolute -top-40 start-1/2 size-[36rem] -translate-x-1/2 rounded-full bg-brand opacity-[0.12] blur-3xl rtl:translate-x-1/2" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-48 -end-32 size-[28rem] rounded-full bg-brand-accent opacity-[0.10] blur-3xl" />
+      <main className="animate-rise relative mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-10 sm:my-12 sm:flex-none sm:rounded-[28px] sm:bg-card sm:px-10 sm:py-12 sm:shadow-float">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           {branding.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={branding.logoUrl} alt="" className="size-14 rounded-2xl object-contain" />
           ) : (
-            <span aria-hidden="true" className="grid size-14 place-items-center rounded-2xl bg-brand font-heading text-xl font-bold text-on-brand">
+            <span aria-hidden="true" className="grid size-16 place-items-center rounded-[20px] bg-brand font-heading text-2xl font-bold text-on-brand shadow-raised">
               {branding.logoText.slice(0, 2)}
             </span>
           )}
-          <h1 className="font-heading text-2xl font-bold text-gray-900">{t('welcome', { app: branding.appName })}</h1>
+          <h1 className="font-heading text-[26px] font-bold tracking-tight text-gray-900">{t('welcome', { app: branding.appName })}</h1>
           {branding.tagline && <p className="text-sm text-gray-600">{branding.tagline}</p>}
         </div>
 

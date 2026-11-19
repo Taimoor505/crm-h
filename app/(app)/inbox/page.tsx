@@ -12,10 +12,10 @@ export default function InboxPage() {
     <div>
       <PageHeader title={t('title')} />
       <div className="grid gap-4 lg:grid-cols-[22rem_1fr]">
-        <div className="overflow-hidden rounded-xl border bg-card shadow-card lg:h-[calc(100dvh-11rem)]">
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-card lg:h-[calc(100dvh-11rem)]">
           <InboxList />
         </div>
-        <div className="hidden rounded-xl border bg-card shadow-card lg:block">
+        <div className="hidden rounded-2xl border bg-card shadow-card lg:block">
           <EmptyState icon={<MessageCircle className="size-6" />} title={t('selectConversation')} className="h-full" />
         </div>
       </div>

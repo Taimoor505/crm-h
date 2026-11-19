@@ -34,7 +34,7 @@ export function NotificationList({ items, onNavigate, compact }: { items: AppNot
   const markRead = useMarkRead();
 
   return (
-    <ul className="divide-y divide-gray-100">
+    <ul className="stagger divide-y divide-gray-100">
       {items.map((n) => {
         const Icon = ICONS[n.type] ?? Bell;
         const unread = !n.read_at;

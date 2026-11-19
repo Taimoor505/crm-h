@@ -21,6 +21,7 @@ import { RescheduleSheet, FollowUpSheet } from '@/components/crm/FollowUpSheet';
 import { RelativeTime } from '@/components/crm/values';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/crm/states';
 import { cn } from '@/lib/utils';
+import { Segmented } from '@/components/motion/Segmented';
 
 const TABS: TaskBucket[] = ['today', 'overdue', 'upcoming'];
 const TYPE_ICONS = { call: Phone, whatsapp: MessageCircle, meeting: Video, site_visit: MapPin, other: Circle } as const;
@@ -57,13 +58,15 @@ function FollowUps() {
         actions={
           <>
             {team && (
-              <div role="group" aria-label={t('show')} className="inline-flex rounded-lg border bg-white p-0.5">
-                {(['me', 'all'] as const).map((v) => (
-                  <button key={v} type="button" aria-pressed={scope === v} onClick={() => setScope(v)} className={cn('h-9 rounded-md px-3 text-sm font-medium', scope === v ? 'bg-brand text-on-brand' : 'text-gray-700 hover:bg-gray-50')}>
-                    {v === 'me' ? t('mine') : t('team')}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                ariaLabel={t('show')}
+                value={scope}
+                onChange={setScope}
+                options={[
+                  { value: 'me', label: t('mine') },
+                  { value: 'all', label: t('team') },
+                ]}
+              />
             )}
             {canWrite && (
               <Button className="h-10" onClick={() => setAdding(true)}>
@@ -74,23 +77,16 @@ function FollowUps() {
           </>
         }
       />
-      <div role="tablist" aria-label={t('title')} className="mb-4 grid grid-cols-3 gap-1 rounded-xl border bg-white p-1">
-        {TABS.map((x) => (
-          <button
-            key={x}
-            type="button"
-            role="tab"
-            aria-selected={tab === x}
-            onClick={() => router.replace(`${pathname}?tab=${x}`, { scroll: false })}
-            className={cn('flex min-h-11 items-center justify-center gap-1.5 rounded-lg text-sm font-medium', tab === x ? 'bg-brand text-on-brand' : 'text-gray-700 hover:bg-gray-50')}
-          >
-            {t(x)}
-            {counts[x] !== undefined && (
-              <span className={cn('rounded-full px-1.5 text-xs tabular-nums', tab === x ? 'bg-white/25' : x === 'overdue' && counts[x]! > 0 ? 'bg-red-100 text-red-800' : 'bg-gray-100')}>{counts[x]}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        role="tablist"
+        ariaLabel={t('title')}
+        fullWidth
+        size="lg"
+        className="mb-5"
+        value={tab}
+        onChange={(x) => router.replace(`${pathname}?tab=${x}`, { scroll: false })}
+        options={TABS.map((x) => ({ value: x, label: t(x), badge: counts[x] }))}
+      />
       <TaskList key={`${tab}-${scope}`} bucket={tab} assignedTo={scope === 'all' ? 'all' : undefined} showAssignee={scope === 'all'} />
       {adding && <FollowUpSheet open onOpenChange={setAdding} />}
     </div>
@@ -108,14 +104,14 @@ function TaskList({ bucket, assignedTo, showAssignee }: { bucket: TaskBucket; as
   if (!tasks.length) {
     const key = bucket === 'today' ? 'Today' : bucket === 'overdue' ? 'Overdue' : 'Upcoming';
     return (
-      <div className="rounded-xl border bg-card shadow-card">
+      <div className="rounded-2xl border bg-card shadow-card">
         <EmptyState icon={<CalendarCheck className="size-6" />} title={t(`empty${key}`)} body={t(`empty${key}Body`)} />
       </div>
     );
   }
   return (
     <div className="space-y-3">
-      <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border bg-card shadow-card">
+      <ul className="stagger divide-y divide-gray-100 overflow-hidden rounded-2xl border bg-card shadow-card">
         {tasks.map((task) => (
           <TaskItem key={task.id} task={task} showAssignee={showAssignee} />
         ))}
