@@ -135,7 +135,7 @@ function PlanSheet({ current, onClose }: { current: string | null; onClose: () =
       {plans.isLoading ? (
         <ListSkeleton rows={3} />
       ) : (
-        <ul className="space-y-2">
+        <ul className="stagger space-y-2">
           {(plans.data ?? []).map((p) => (
             <li key={p.id} className={cn('flex items-center justify-between gap-3 rounded-lg border p-3', p.id === current && 'border-brand bg-brand-surface')}>
               <div>

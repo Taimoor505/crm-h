@@ -28,7 +28,7 @@ export function DealCard({
   const overdue = deal.next_task_due_at ? isOverdue(deal.next_task_due_at) : false;
 
   return (
-    <div className={cn('rounded-lg border bg-white p-3 shadow-card', dragging && 'rotate-1 shadow-float ring-2 ring-brand', className)}>
+    <div className={cn('lift rounded-xl border bg-card p-3.5 shadow-card', dragging && 'rotate-2 shadow-float ring-2 ring-brand', className)}>
       <div className="flex items-start justify-between gap-2">
         <Link href={`/contacts/${deal.contact_id}`} className="min-w-0 flex-1" onPointerDown={(e) => e.stopPropagation()}>
           <p className="truncate text-sm font-semibold text-gray-900 hover:underline">{deal.contact?.name ?? deal.title}</p>
@@ -55,7 +55,7 @@ export function DealCard({
         <button
           type="button"
           onClick={onMoveNext}
-          className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-md border border-brand/40 bg-brand-surface text-sm font-medium text-brand-ink hover:bg-brand-surface/70"
+          className="press mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full bg-brand-surface text-sm font-semibold text-brand-ink hover:brightness-[0.97]"
         >
           {p('moveNext', { stage: nextStage.name })}
           <ArrowRight className="size-4 rtl:rotate-180" aria-hidden="true" />

@@ -161,7 +161,7 @@ function Leads() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-card">
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
         {q.isLoading ? (
           <ListSkeleton rows={8} />
         ) : q.isError ? (

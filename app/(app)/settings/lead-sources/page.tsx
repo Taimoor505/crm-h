@@ -70,7 +70,7 @@ function SourceCard({ source, secret, onSecret }: { source: LeadSource; secret: 
   return (
     <SettingsCard>
       <div className="flex items-start gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-surface text-brand-ink" aria-hidden="true">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-surface text-brand-ink" aria-hidden="true">
           <Icon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">

@@ -35,9 +35,9 @@ function AutomationCard({ a }: { a: Automation }) {
   const hasSettings = Object.keys(a.settings_schema.properties ?? {}).length > 0;
 
   return (
-    <section className="rounded-xl border bg-card shadow-card">
+    <section className="rounded-2xl border bg-card shadow-card">
       <div className="flex items-start gap-3 p-4">
-        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-surface text-brand-ink" aria-hidden="true">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-surface text-brand-ink" aria-hidden="true">
           <Zap className="size-5" />
         </span>
         <div className="min-w-0 flex-1">

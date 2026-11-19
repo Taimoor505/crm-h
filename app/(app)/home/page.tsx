@@ -9,7 +9,7 @@ import { useAllDeals, useMemberNames, usePipelines } from '@/hooks/queries/crm';
 import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
 import { useSession } from '@/lib/auth/SessionProvider';
 import { usePermissions } from '@/lib/permissions';
-import { dayKey, formatDuration, formatMoneyValue, formatNumber, zonedParts } from '@/lib/format';
+import { dayKey, formatDate, formatDuration, formatMoneyValue, formatNumber, formatWeekday, zonedParts } from '@/lib/format';
 import type { HomeSummary, Task } from '@/lib/api/types';
 import { Section } from '@/components/layout/PageHeader';
 import { SourceBadge, Avatar } from '@/components/crm/badges';
@@ -19,6 +19,8 @@ import { CardSkeleton, EmptyState, ErrorState, ListSkeleton } from '@/components
 import { cn, firstName } from '@/lib/utils';
 import { Suspense } from 'react';
 import { SampleDataBanner } from '@/components/crm/SampleDataBanner';
+import { Segmented } from '@/components/motion/Segmented';
+import { CountUp } from '@/components/motion/CountUp';
 
 export default function HomePage() {
   const t = useTranslations('home');
@@ -33,23 +35,22 @@ export default function HomePage() {
   const greeting = hour < 12 ? 'greetingMorning' : hour < 18 ? 'greetingAfternoon' : 'greetingEvening';
 
   return (
-    <div className="space-y-4 lg:space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="font-heading text-xl font-bold lg:text-2xl">{t(greeting, { name: firstName(me?.user.name) || '' })}</h1>
+    <div className="space-y-5 lg:space-y-7">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-heading text-[22px] font-bold tracking-tight lg:text-[28px]">{t(greeting, { name: firstName(me?.user.name) || '' })}</h1>
+          <p className="mt-1 text-sm text-gray-600">{formatWeekday(new Date(), s)}, {formatDate(new Date(), s)}</p>
+        </div>
         {team && (
-          <div role="group" aria-label={t('scope')} className="inline-flex rounded-lg border bg-white p-0.5">
-            {(['me', 'team'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={scope === v}
-                onClick={() => setScope(v)}
-                className={cn('h-9 rounded-md px-4 text-sm font-medium', scope === v ? 'bg-brand text-on-brand' : 'text-gray-700 hover:bg-gray-50')}
-              >
-                {v === 'me' ? t('mine') : t('team')}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            ariaLabel={t('scope')}
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: 'me', label: t('mine') },
+              { value: 'team', label: t('team') },
+            ]}
+          />
         )}
       </div>
 
@@ -62,7 +63,7 @@ export default function HomePage() {
       ) : (
         <>
           <Kpis data={summary.data} />
-          <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
+          <div className="grid items-stretch gap-4 lg:grid-cols-2 lg:gap-6">
             <FollowUpsBlock data={summary.data} loading={summary.isLoading} />
             <NewLeadsBlock data={summary.data} loading={summary.isLoading} />
           </div>
@@ -79,28 +80,31 @@ function Kpis({ data }: { data?: HomeSummary }) {
   const s = useWorkspaceSettings();
   if (!data) {
     return (
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {Array.from({ length: 4 }, (_, i) => (
-          <CardSkeleton key={i} className="h-20" />
+          <CardSkeleton key={i} className="h-[104px] rounded-2xl" />
         ))}
       </div>
     );
   }
+  const num = (n: number) => formatNumber(n, s);
   const items = [
-    { label: t('overdue'), value: formatNumber(data.tasks.overdue, s), icon: AlertTriangle, tone: data.tasks.overdue > 0 ? 'text-red-700' : 'text-gray-900', href: '/follow-ups?tab=overdue' },
-    { label: t('dueToday'), value: formatNumber(data.tasks.due_today, s), icon: CalendarCheck, tone: 'text-gray-900', href: '/follow-ups' },
-    { label: t('newToday'), value: formatNumber(data.leads.new_today, s), icon: UserPlus, tone: 'text-gray-900', href: '/leads' },
-    { label: t('speedToLead'), value: formatDuration(data.speed_to_lead_today.median_seconds, s), icon: Timer, tone: 'text-gray-900', href: '/reports', hint: t('speedHint') },
+    { label: t('overdue'), value: <CountUp value={data.tasks.overdue} format={num} />, icon: AlertTriangle, chip: data.tasks.overdue > 0 ? 'bg-red-50 text-red-700' : 'bg-brand-surface text-brand-ink', tone: data.tasks.overdue > 0 ? 'text-red-700' : 'text-gray-900', href: '/follow-ups?tab=overdue' },
+    { label: t('dueToday'), value: <CountUp value={data.tasks.due_today} format={num} />, icon: CalendarCheck, chip: 'bg-brand-surface text-brand-ink', tone: 'text-gray-900', href: '/follow-ups' },
+    { label: t('newToday'), value: <CountUp value={data.leads.new_today} format={num} />, icon: UserPlus, chip: 'bg-brand-surface text-brand-ink', tone: 'text-gray-900', href: '/leads' },
+    { label: t('speedToLead'), value: formatDuration(data.speed_to_lead_today.median_seconds, s), icon: Timer, chip: 'bg-brand-surface text-brand-ink', tone: 'text-gray-900', href: '/reports', hint: t('speedHint') },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
       {items.map((k) => (
-        <Link key={k.label} href={k.href} title={k.hint} className="rounded-xl border bg-card p-3 shadow-card hover:border-brand/40">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-gray-600">
-            <k.icon className="size-3.5" aria-hidden="true" />
-            {k.label}
-          </p>
-          <p className={cn('mt-1 font-heading text-2xl font-bold tabular-nums', k.tone)}>{k.value}</p>
+        <Link key={k.label} href={k.href} title={k.hint} className="lift flex min-h-[104px] flex-col justify-between rounded-2xl border bg-card p-4 shadow-card">
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-gray-600 lg:text-sm">{k.label}</span>
+            <span className={cn('grid size-9 shrink-0 place-items-center rounded-full', k.chip)} aria-hidden="true">
+              <k.icon className="size-4" />
+            </span>
+          </span>
+          <span className={cn('font-heading text-[28px] leading-none font-bold tracking-tight tabular-nums', k.tone)}>{k.value}</span>
         </Link>
       ))}
     </div>
@@ -111,7 +115,7 @@ function TaskRow({ task }: { task: Task }) {
   const t = useTranslations('home');
   const name = task.contact?.name ?? task.title;
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
+    <li className="flex items-center gap-3 px-5 py-3">
       <Link href={task.contact_id ? `/contacts/${task.contact_id}` : '/follow-ups'} className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-gray-900">{task.title}</p>
         <p className="flex items-center gap-1.5 text-xs">
@@ -152,8 +156,9 @@ function FollowUpsBlock({ data, loading }: { data?: HomeSummary; loading: boolea
       {loading ? (
         <ListSkeleton rows={3} />
       ) : data && data.tasks.next.length ? (
-        <ul className="divide-y divide-gray-100 pb-1">
-          {data.tasks.next.map((task) => (
+        <ul className="stagger divide-y divide-gray-100 pb-2">
+          {/* Five rows on each side keeps the two panels the same height. */}
+          {data.tasks.next.slice(0, 5).map((task) => (
             <TaskRow key={task.id} task={task} />
           ))}
         </ul>
@@ -181,14 +186,14 @@ function NewLeadsBlock({ data, loading }: { data?: HomeSummary; loading: boolean
       ) : data && data.leads.recent.length ? (
         <>
           {data.leads.unassigned ? (
-            <Link href="/leads?owner=none" className="mx-4 mb-1 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950">
+            <Link href="/leads?owner=none" className="press mx-5 mb-1 flex min-h-10 items-center justify-between rounded-full bg-amber-50 px-4 text-sm font-medium text-amber-950">
               {t('unassignedCount', { count: data.leads.unassigned })}
               <ChevronRight className="size-4 rtl:rotate-180" aria-hidden="true" />
             </Link>
           ) : null}
-          <ul className="divide-y divide-gray-100 pb-1">
-            {data.leads.recent.map((l) => (
-              <li key={l.id} className="flex items-center gap-3 px-4 py-3">
+          <ul className="stagger divide-y divide-gray-100 pb-2">
+            {data.leads.recent.slice(0, 4).map((l) => (
+              <li key={l.id} className="flex items-center gap-3 px-5 py-3">
                 <Avatar name={l.name} seed={l.id} />
                 <Link href={`/contacts/${l.id}`} className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-gray-900">{l.name || l.phone_e164}</p>
@@ -235,18 +240,18 @@ function PipelineSnapshot() {
   return (
     <Section title={pipeline ? `${t('pipelineTitle')} · ${pipeline.name}` : t('pipelineTitle')}>
       {pipelines.isLoading || deals.isLoading ? (
-        <div className="flex gap-3 overflow-hidden px-4 pb-4">
+        <div className="flex gap-3 overflow-hidden px-5 pb-5">
           {Array.from({ length: 4 }, (_, i) => (
-            <CardSkeleton key={i} className="h-20 w-40 shrink-0" />
+            <CardSkeleton key={i} className="h-24 w-44 shrink-0 rounded-2xl" />
           ))}
         </div>
       ) : stages.length ? (
-        <ul className="scrollbar-none flex snap-x gap-3 overflow-x-auto px-4 pb-4">
+        <ul className="stagger scrollbar-none grid snap-x auto-cols-[minmax(11rem,1fr)] grid-flow-col gap-3 overflow-x-auto px-5 pb-5">
           {stages.map((st) => (
             <li key={st.id} className="snap-start">
-              <Link href={`/pipeline?pipeline=${pipeline!.id}&stage=${st.id}`} className="block w-40 rounded-lg border bg-brand-surface/50 p-3 hover:border-brand/40">
+              <Link href={`/pipeline?pipeline=${pipeline!.id}&stage=${st.id}`} className="lift block h-full rounded-2xl bg-brand-surface/70 p-4">
                 <p className="truncate text-xs font-medium text-gray-700">{st.name}</p>
-                <p className="mt-1 font-heading text-lg font-bold tabular-nums text-brand-ink">{formatMoneyValue(st.value, s, { compact: true })}</p>
+                <p className="mt-2 font-heading text-xl font-bold tracking-tight tabular-nums text-brand-ink">{formatMoneyValue(st.value, s, { compact: true })}</p>
                 <p className="text-xs text-gray-600">{t('dealsCount', { count: st.count })}</p>
               </Link>
             </li>
@@ -281,16 +286,16 @@ function TeamToday() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-start text-xs text-gray-600">
-                <th scope="col" className="px-4 py-2 text-start font-medium">{t('colAgent')}</th>
+                <th scope="col" className="px-5 py-2 text-start font-medium">{t('colAgent')}</th>
                 <th scope="col" className="px-2 py-2 text-end font-medium">{t('colCalls')}</th>
-                <th scope="col" className="px-2 py-2 text-end font-medium">{t('colDone')}</th>
-                <th scope="col" className="px-4 py-2 text-end font-medium">{t('colUntouched')}</th>
+                <th scope="col" className="px-2 py-2 text-end font-medium"><span className="sm:hidden">{t('colDoneShort')}</span><span className="hidden sm:inline">{t('colDone')}</span></th>
+                <th scope="col" className="px-5 py-2 text-end font-medium"><span className="sm:hidden">{t('colUntouchedShort')}</span><span className="hidden sm:inline">{t('colUntouched')}</span></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="stagger divide-y divide-gray-100">
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="px-4 py-2.5">
+                  <td className="px-5 py-3">
                     <span className="flex items-center gap-2">
                       <Avatar name={r.name} seed={r.id} size="sm" />
                       <span className="truncate font-medium">{r.name}</span>
@@ -298,7 +303,7 @@ function TeamToday() {
                   </td>
                   <td className="px-2 py-2.5 text-end tabular-nums">{formatNumber(r.calls, s)}</td>
                   <td className="px-2 py-2.5 text-end tabular-nums">{formatNumber(r.done, s)}</td>
-                  <td className="px-4 py-2.5 text-end">
+                  <td className="px-5 py-3 text-end">
                     <span className={cn('tabular-nums', r.untouched >= 3 && 'rounded-full bg-red-50 px-2 py-0.5 font-semibold text-red-700')} title={r.untouched >= 3 ? t('untouchedHigh', { count: r.untouched }) : undefined}>
                       {formatNumber(r.untouched, s)}
                     </span>

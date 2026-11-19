@@ -47,10 +47,13 @@ export const openQuickAdd = (prefill?: UiState['quickAddPrefill']) => setUi({ qu
 export const closeQuickAdd = () => setUi({ quickAddOpen: false, quickAddPrefill: null });
 export const countUsefulAction = () => setUi((s) => ({ usefulActions: s.usefulActions + 1 }));
 
-/** Opens the dialer; the call outcome sheet appears when the person comes back. */
+/**
+ * Records the call so the outcome sheet appears when the person comes back.
+ * The tel: link itself opens the dialer (assigning location.href would fire
+ * beforeunload and tear down page state).
+ */
 export function startCall(call: Omit<PendingCall, 'startedAt'>) {
   setUi({ pendingCall: { ...call, startedAt: Date.now() } });
-  window.location.href = `tel:${call.phone}`;
 }
 
 export function openCallOutcome(call: PendingCall) {

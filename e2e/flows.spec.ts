@@ -58,9 +58,6 @@ test('4. completing a follow-up with a call outcome', async ({ page }) => {
   const first = page.getByRole('listitem').filter({ has: page.getByRole('link', { name: /Call|WhatsApp|Meet|Viewing|Follow up/ }) }).first();
   const title = (await first.getByRole('link').first().textContent())!.trim();
   // Simulate "dialer opened, person came back" (the outcome sheet opens on return).
-  await page.evaluate(() => {
-    window.location.assign = () => {};
-  });
   await page.route('tel:*', (r) => r.abort());
   await first.locator('a[href^="tel:"]').click();
   await page.waitForTimeout(1700);
@@ -76,22 +73,28 @@ test('4. completing a follow-up with a call outcome', async ({ page }) => {
 
 test('5. changing the workspace region changes money and date formats', async ({ page }) => {
   await login(page, USERS.owner);
-  await page.goto('/home');
-  await expect(page.getByText(/\$\d/).first()).toBeVisible();
+  await page.goto('/reports');
+  await expect(page.getByText(/\$[\d.,]+[KMB]?/).first()).toBeVisible();
   await page.goto('/settings/workspace');
   await page.getByLabel('Currency').click();
   await page.getByRole('option', { name: 'GBP' }).click();
+  await page.getByLabel('Time format').click();
+  await page.getByRole('option', { name: '24-hour' }).click();
+  // The live preview follows the edited region before saving.
+  await expect(page.getByText(/£1,250,000/)).toBeVisible();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Changes saved')).toBeVisible();
-  await page.goto('/home');
-  await expect(page.getByText(/£\d/).first()).toBeVisible();
+  // Report totals use the workspace currency without a reload.
+  if (isMobile(page)) await page.getByRole('button', { name: 'More' }).click();
+  await page.getByRole('link', { name: 'Reports' }).click();
+  await expect(page.getByText(/£[\d.,]+[KMB]?/).first()).toBeVisible();
 });
 
 test('6. read-only mode hides write actions', async ({ page }) => {
   await login(page, USERS.owner);
   await expect(page.getByRole('button', { name: 'Add lead' }).first()).toBeVisible();
   // Flip the workspace to read-only with the dev switcher (what billing enforcement does).
-  await page.getByRole('button', { name: 'Dev switcher' }).click();
+  await page.getByRole('button', { name: 'Dev switcher' }).click({ force: true });
   await page.getByLabel('Workspace status').selectOption('read_only');
   await expect(page.getByText('Your workspace is read-only. Pay the open invoice to continue.')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Go to billing' })).toBeVisible();

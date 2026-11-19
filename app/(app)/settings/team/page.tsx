@@ -50,7 +50,7 @@ export default function TeamSettingsPage() {
         ) : members.isError ? (
           <ErrorState onRetry={() => members.refetch()} />
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="stagger divide-y divide-gray-100">
             {(members.data ?? []).map((mem) => {
               const me = mem.user_id === session?.userId;
               const editable = canWrite && !me && (mem.role !== 'owner' || roles.includes('owner'));

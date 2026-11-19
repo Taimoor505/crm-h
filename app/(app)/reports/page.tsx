@@ -127,7 +127,7 @@ export default function ReportsPage() {
         }
       />
 
-      <div className="space-y-3 rounded-xl border bg-card p-3 shadow-card">
+      <div className="space-y-3 rounded-2xl border bg-card p-3 shadow-card">
         <div role="group" aria-label={t('range')} className="scrollbar-none flex gap-2 overflow-x-auto">
           {(['today', 'last7', 'thisMonth', 'lastMonth', 'custom'] as const).map((p) => (
             <Chip key={p} selected={preset === p} onClick={() => setPreset(p)} className="shrink-0">
@@ -201,7 +201,7 @@ export default function ReportsPage() {
               k.value === null ? (
                 <CardSkeleton key={k.label} className="h-20" />
               ) : (
-                <div key={k.label} className="rounded-xl border bg-card p-3 shadow-card">
+                <div key={k.label} className="rounded-2xl border bg-card p-3 shadow-card">
                   <p className="text-xs font-medium text-gray-600">{k.label}</p>
                   <p className="mt-1 font-heading text-2xl font-bold tabular-nums text-gray-900">{k.value}</p>
                 </div>

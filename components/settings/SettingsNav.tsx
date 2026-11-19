@@ -37,11 +37,11 @@ export function SettingsNav({ variant }: { variant: 'side' | 'list' }) {
 
   if (variant === 'list') {
     return (
-      <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border bg-card shadow-card">
+      <ul className="stagger divide-y divide-gray-100 overflow-hidden rounded-2xl border bg-card shadow-card">
         {sections.map((s) => (
           <li key={s.key}>
             <Link href={s.href} className="flex min-h-16 items-center gap-3 px-4 py-3 hover:bg-gray-50">
-              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-surface text-brand-ink" aria-hidden="true">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-surface text-brand-ink" aria-hidden="true">
                 <s.icon className="size-5" />
               </span>
               <span className="min-w-0 flex-1">

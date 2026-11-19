@@ -30,14 +30,14 @@ function Column({ stage, deals, ownerName, disabled }: { stage: Stage; deals: De
   const s = useWorkspaceSettings();
   const { setNodeRef, isOver } = useDroppable({ id: stage.id, data: { stage } });
   return (
-    <section aria-label={stage.name} className="flex w-72 shrink-0 flex-col rounded-xl bg-gray-100/80">
-      <header className={cn('flex items-baseline justify-between gap-2 rounded-t-xl px-3 pt-3 pb-2', stage.kind === 'won' && 'text-green-800', stage.kind === 'lost' && 'text-gray-600')}>
+    <section aria-label={stage.name} className="flex w-72 shrink-0 flex-col rounded-2xl bg-card/60 ring-1 ring-black/5">
+      <header className={cn('flex items-baseline justify-between gap-2 rounded-t-2xl px-4 pt-4 pb-2', stage.kind === 'won' && 'text-green-800', stage.kind === 'lost' && 'text-gray-600')}>
         <h2 className="truncate font-heading text-sm font-semibold">{stage.name}</h2>
         <p className="shrink-0 text-xs font-medium text-gray-600 tabular-nums">
           {t('stageTotal', { count: deals.length, value: formatMoneyValue(stageTotal(deals, s.currency), s, { compact: true }) })}
         </p>
       </header>
-      <div ref={setNodeRef} className={cn('flex min-h-32 flex-1 flex-col gap-2 overflow-y-auto rounded-b-xl p-2 transition-colors', isOver && 'bg-brand-surface ring-2 ring-brand/50 ring-inset')}>
+      <div ref={setNodeRef} className={cn('stagger flex min-h-32 flex-1 flex-col gap-2.5 overflow-y-auto rounded-b-2xl p-2.5 transition-colors', isOver && 'bg-brand-surface ring-2 ring-brand/50 ring-inset')}>
         {deals.map((d) => (
           <DraggableCard key={d.id} deal={d} ownerName={ownerName(d.owner_id)} disabled={disabled} />
         ))}

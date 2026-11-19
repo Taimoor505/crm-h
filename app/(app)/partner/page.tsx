@@ -44,7 +44,7 @@ export default function PartnerClientsPage() {
           {t('newWorkspace')}
         </Button>
       </div>
-      <div className="overflow-hidden rounded-xl border bg-card shadow-card">
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-card">
         {list.isLoading ? (
           <ListSkeleton rows={4} />
         ) : list.isError ? (

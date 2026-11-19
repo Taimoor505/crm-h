@@ -48,8 +48,8 @@ export function ResponsiveSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={cn('max-h-[92dvh] overflow-y-auto rounded-t-2xl px-4 pb-safe', className)}>
-        <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-gray-300" aria-hidden="true" />
+      <SheetContent side="bottom" className={cn('max-h-[92dvh] overflow-y-auto rounded-t-[28px] border-0 px-5 pb-safe shadow-sheet', className)}>
+        <div className="mx-auto mt-3 h-1 w-8 rounded-full bg-gray-300" aria-hidden="true" />
         <SheetHeader className="px-0 text-start">
           <SheetTitle className="font-heading">{title}</SheetTitle>
           {description ? <SheetDescription>{description}</SheetDescription> : <SheetDescription className="sr-only">{title}</SheetDescription>}

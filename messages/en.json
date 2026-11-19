@@ -168,7 +168,18 @@
     "samplesCleared": "Sample data removed",
     "invitesSent": "{count, plural, one {# invite sent} other {# invites sent}}",
     "nameRequired": "Enter your business name.",
-    "loadingTemplates": "Loading business types…"
+    "loadingTemplates": "Loading business types…",
+    "stepBusiness": "Business type",
+    "stepBusinessHint": "Stages and fields made for you",
+    "stepRegion": "Name and region",
+    "stepRegionHint": "Currency, time zone, phone format",
+    "stepTeam": "Your team",
+    "stepTeamHint": "Work alone or invite people",
+    "panelTitle": "Your CRM, ready in under a minute",
+    "panelBody": "Answer three quick questions and we set up your pipeline, fields and team.",
+    "stagesCount": "{count, plural, one {# stage} other {# stages}}",
+    "fieldsCount": "{count, plural, one {# field} other {# fields}}",
+    "recommended": "Popular"
   },
   "roles": {
     "owner": "Owner",
@@ -387,7 +398,9 @@
     "colCalls": "Calls",
     "colDone": "Follow-ups done",
     "colUntouched": "Untouched",
-    "untouchedHigh": "{count} untouched leads"
+    "untouchedHigh": "{count} untouched leads",
+    "colDoneShort": "Done",
+    "colUntouchedShort": "Waiting"
   },
   "regionFields": {
     "sqft": "Square feet",
@@ -1003,5 +1016,14 @@
     "synced": "{count, plural, one {Synced # saved change} other {Synced # saved changes}}",
     "queuedLead": "You're offline. The lead is saved and will sync when you reconnect.",
     "queuedNote": "You're offline. The note will sync when you reconnect."
+  },
+  "authPanel": {
+    "point1Title": "Answer every lead in minutes",
+    "point1": "New leads from your website, ads and WhatsApp arrive in one place.",
+    "point2Title": "Follow-ups that never slip",
+    "point2": "Today, overdue and upcoming, with one-tap call and WhatsApp.",
+    "point3Title": "See your whole pipeline",
+    "point3": "Drag deals to won and know exactly where revenue stands.",
+    "secure": "Secure sign-in with a one-time code"
   }
 }

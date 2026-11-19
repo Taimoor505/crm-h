@@ -99,7 +99,7 @@ function Tokens() {
           <StageBadge name="Lost" kind="lost" />
         </div>
         <h2 className="pt-3 font-heading text-lg font-semibold">{t('cards')}</h2>
-        <div className="max-w-sm rounded-xl border bg-card p-4 shadow-card">
+        <div className="max-w-sm rounded-2xl border bg-card p-4 shadow-card">
           <p className="font-heading font-semibold">{t('cardTitle')}</p>
           <p className="mt-1 text-sm text-gray-600">{t('cardBody')}</p>
           <div className="mt-3 rounded-md bg-brand-surface px-3 py-2 text-sm font-medium text-brand-ink">{formatMoney(1250000, region.currency, region, { compact: true })}</div>
