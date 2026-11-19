@@ -40,10 +40,9 @@ export function ReasonSheet({
       setError(true);
       return;
     }
-    move.mutate(
-      { id: deal.id, stageId: stage.id, reason: won ? { won_reason: value.trim() } : { lost_reason: value.trim() } },
-      { onSuccess: () => toast.success(t('moved', { stage: stage.name })) },
-    );
+    // Optimistic: the sheet closes now, so confirm now (errors roll back with a toast).
+    move.mutate({ id: deal.id, stageId: stage.id, reason: won ? { won_reason: value.trim() } : { lost_reason: value.trim() } });
+    toast.success(t('moved', { stage: stage.name }));
     countUsefulAction();
     onOpenChange(false);
     onMoved?.();
@@ -107,7 +106,8 @@ export function MoveDealSheet({ open, onOpenChange, deal, pipeline }: { open: bo
                     setClosing(st);
                     return;
                   }
-                  move.mutate({ id: deal.id, stageId: st.id }, { onSuccess: () => toast.success(t('moved', { stage: st.name })) });
+                  move.mutate({ id: deal.id, stageId: st.id });
+                  toast.success(t('moved', { stage: st.name }));
                   countUsefulAction();
                   onOpenChange(false);
                 }}

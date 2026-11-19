@@ -64,7 +64,8 @@ function PipelineView() {
       return;
     }
     countUsefulAction();
-    move.mutate({ id: deal.id, stageId: stage.id }, { onSuccess: () => toast.success(d('moved', { stage: stage.name })) });
+    move.mutate({ id: deal.id, stageId: stage.id });
+    toast.success(d('moved', { stage: stage.name }));
   }
 
   const list = deals.data ?? [];

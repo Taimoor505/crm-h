@@ -522,7 +522,9 @@ function NoteSheet({ contactId, onClose }: { contactId: string; onClose: () => v
           className="h-11 w-full"
           disabled={!body.trim()}
           onClick={() => {
-            add.mutate(body.trim(), { onSuccess: (a) => (a ? toast.success(t('noteSaved')) : toast.info(o('queuedNote'))) });
+            // Optimistic: shown in the timeline at once; offline notes are queued.
+            add.mutate(body.trim());
+            toast.success(navigator.onLine ? t('noteSaved') : o('queuedNote'));
             countUsefulAction();
             onClose();
           }}
@@ -550,7 +552,8 @@ function AssignSheet({ contact, onClose }: { contact: Contact; onClose: () => vo
             <button
               type="button"
               onClick={() => {
-                assign.mutate({ id: contact.id, userId: m.user_id }, { onSuccess: () => toast.success(t('assigned')) });
+                assign.mutate({ id: contact.id, userId: m.user_id });
+                toast.success(t('assigned'));
                 onClose();
               }}
               className={cn('flex min-h-12 w-full items-center gap-3 rounded-lg border px-3 text-start text-sm font-medium hover:bg-gray-50', contact.owner_id === m.user_id && 'border-brand bg-brand-surface')}

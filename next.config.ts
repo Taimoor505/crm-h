@@ -41,6 +41,15 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {
+    // Test artifacts written during e2e runs must not trigger dev recompiles/reloads.
+    if (dev) {
+      const prev = config.watchOptions?.ignored;
+      const list = Array.isArray(prev) ? prev : prev ? [prev] : [];
+      config.watchOptions = {
+        ...config.watchOptions,
+        ignored: [...list.filter((x: unknown) => typeof x === 'string' && x.length > 0), '**/node_modules/**', '**/.git/**', '**/test-results/**', '**/playwright-report/**'],
+      };
+    }
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
     // Do not modify—file watching is disabled to prevent flickering during agent edits.
     if (dev && process.env.DISABLE_HMR === 'true') {

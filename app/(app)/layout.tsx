@@ -8,6 +8,8 @@ import { PushPrompt } from '@/components/crm/PushPrompt';
 import { OfflineSync } from '@/components/providers/OfflineSync';
 import { PwaRegister } from '@/components/providers/PwaRegister';
 
+export const dynamic = 'force-dynamic';
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AppProviders>
