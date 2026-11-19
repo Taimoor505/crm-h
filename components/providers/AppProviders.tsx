@@ -10,7 +10,6 @@ import { makeQueryClient } from '@/lib/query-client';
 import { SessionProvider } from '@/lib/auth/SessionProvider';
 import { mockMode } from '@/mocks/mode';
 import { setAppState } from '@/lib/app-state';
-import { MotionProvider } from '@/components/motion/MotionProvider';
 
 /**
  * Query client, API mocks (docs/frontend-endpoint-map.md), session and toasts.
@@ -64,9 +63,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={client}>
       <TooltipProvider delayDuration={300}>
-        <MotionProvider>
-          <SessionProvider>{children}</SessionProvider>
-        </MotionProvider>
+        <SessionProvider>{children}</SessionProvider>
       </TooltipProvider>
       <Toaster />
     </QueryClientProvider>
