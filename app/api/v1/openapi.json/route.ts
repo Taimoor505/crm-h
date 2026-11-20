@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildOpenApiSpec } from '@/lib/taimoor/openapi';
+import { logged } from '@/server/observability/request-log';
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
   const origin = req.nextUrl.origin || 'http://localhost:3000';
   const spec = buildOpenApiSpec(origin);
   return NextResponse.json(spec, {
@@ -10,3 +11,5 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+
+export const GET = logged(GET_handler);

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbConnectionStatus, getState, resetSeedState } from '@/lib/taimoor/store';
 import { CORE_SCHEMA_TABLES, MIGRATION_SQL_SNIPPETS } from '@/lib/taimoor/sql-pack';
 import { OPENAPI_ENDPOINTS } from '@/lib/taimoor/openapi';
+import { logged } from '@/server/observability/request-log';
 
-export async function GET(req: NextRequest) {
+async function GET_handler(req: NextRequest) {
   const state = getState();
   const workspaceId = req.nextUrl.searchParams.get('workspace_id') || state.workspaces[0]?.id;
   const dbStatus = getDbConnectionStatus();
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-export async function POST(req: NextRequest) {
+async function POST_handler(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   if (body?.action === 'reset_seed') {
     const fresh = resetSeedState();
@@ -63,3 +64,6 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
+
+export const GET = logged(GET_handler);
+export const POST = logged(POST_handler);

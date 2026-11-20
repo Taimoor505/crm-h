@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { withService } from '@/server/db';
 import { errorResponse, json, readQuery } from '@/server/http';
 import { housePartner } from '@/server/core/workspaces';
+import { logged } from '@/server/observability/request-log';
 
 const q = z.object({ workspace_id: z.uuid().optional(), host: z.string().max(253).optional() });
 
@@ -9,7 +10,7 @@ const q = z.object({ workspace_id: z.uuid().optional(), host: z.string().max(253
  * GET /branding (public): partner defaults merged with the workspace's own
  * overrides. Used before sign-in (by host) and after (by workspace).
  */
-export async function GET(req: Request) {
+async function GET_handler(req: Request) {
   try {
     const p = readQuery(req, q);
     const out = await withService(async (tx) => {
@@ -40,3 +41,5 @@ export async function GET(req: Request) {
   }
 }
 export const dynamic = 'force-dynamic';
+
+export const GET = logged(GET_handler);

@@ -3,13 +3,14 @@ import { withService } from '@/server/db';
 import { errorResponse, json, ApiError } from '@/server/http';
 import { verifyMetaSignature } from '@/server/channels/meta';
 import { recordInbound, recordStatus } from '@/server/core/inbox';
+import { logged } from '@/server/observability/request-log';
 
 /**
  * WhatsApp Cloud API webhook (Meta app → Webhooks → whatsapp_business_account,
  * field "messages"). GET is the verification handshake (META_VERIFY_TOKEN);
  * POST is signed with the app secret.
  */
-export async function GET(req: Request) {
+async function GET_handler(req: Request) {
   const q = new URL(req.url).searchParams;
   const expected = process.env.META_VERIFY_TOKEN ?? '';
   const got = q.get('hub.verify_token') ?? '';
@@ -27,7 +28,7 @@ interface WaValue {
   statuses?: { id: string; status: string }[];
 }
 
-export async function POST(req: Request) {
+async function POST_handler(req: Request) {
   try {
     const raw = await req.text();
     if (!verifyMetaSignature(raw, req.headers.get('x-hub-signature-256'))) {
@@ -65,3 +66,6 @@ export async function POST(req: Request) {
     return errorResponse(err);
   }
 }
+
+export const GET = logged(GET_handler);
+export const POST = logged(POST_handler);

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 const SESSION_COOKIE = 'crm_session';
-const PUBLIC = ['/login', '/signup', '/forgot-password', '/auth/callback', '/reset-password', '/set-password', '/suspended', '/dev'];
+const PUBLIC = ['/login', '/signup', '/forgot-password', '/auth/callback', '/reset-password', '/set-password', '/suspended', '/dev', '/status'];
 
 /**
  * Signed-out users go to /login before any app page renders. The cookie is a

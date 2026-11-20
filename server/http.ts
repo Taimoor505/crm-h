@@ -1,6 +1,7 @@
 import { z, ZodError } from 'zod';
 import { bearerToken, verifyAccessToken } from './auth';
 import { withService, withUser, type Tx } from './db';
+import { logged, tagRequest } from './observability/request-log';
 
 export class ApiError extends Error {
   constructor(
@@ -90,11 +91,13 @@ export function userRoute<P = Record<string, string>>(
   },
   handler: (c: UserCtx<P>) => Promise<Response>,
 ): NextHandler<P> {
-  return async (req, ctx) => {
+  return logged(async (req, ctx) => {
     try {
       const { userId } = await verifyAccessToken(bearerToken(req));
+      tagRequest({ userId });
       const wsHeader = req.headers.get('x-workspace-id');
       const ws = uuid.safeParse(wsHeader);
+      if (ws.success) tagRequest({ workspaceId: ws.data });
       if (!ws.success) throw new ApiError(400, 'workspace_required', 'X-Workspace-Id header (uuid) is required');
       const params = (await ctx?.params) ?? ({} as P);
 
@@ -132,7 +135,7 @@ export function userRoute<P = Record<string, string>>(
     } catch (err) {
       return errorResponse(err);
     }
-  };
+  });
 }
 
 /**
@@ -143,15 +146,16 @@ export function userRoute<P = Record<string, string>>(
 export function authRoute<P = Record<string, string>>(
   handler: (c: { req: Request; params: P; userId: string; tx: Tx }) => Promise<Response>,
 ): NextHandler<P> {
-  return async (req, ctx) => {
+  return logged(async (req, ctx) => {
     try {
       const { userId } = await verifyAccessToken(bearerToken(req));
+      tagRequest({ userId });
       const params = (await ctx?.params) ?? ({} as P);
       return await withService((tx) => handler({ req, params, userId, tx }));
     } catch (err) {
       return errorResponse(err);
     }
-  };
+  });
 }
 
 export async function readJson<T extends z.ZodType>(req: Request, schema: T): Promise<z.infer<T>> {

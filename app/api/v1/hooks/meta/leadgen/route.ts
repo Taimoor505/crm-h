@@ -3,6 +3,7 @@ import { withService } from '@/server/db';
 import { errorResponse, json, ApiError } from '@/server/http';
 import { verifyMetaSignature } from '@/server/channels/meta';
 import { recordLeadgen, type LeadgenChange } from '@/server/leads/meta';
+import { logged } from '@/server/observability/request-log';
 
 /**
  * Meta lead ads webhook (one URL for the whole platform; set it in the Meta
@@ -13,7 +14,7 @@ import { recordLeadgen, type LeadgenChange } from '@/server/leads/meta';
  * lead id and queue a job, so Meta gets its 200 within milliseconds; the
  * worker fetches the answers from the Graph API.
  */
-export async function GET(req: Request) {
+async function GET_handler(req: Request) {
   const q = new URL(req.url).searchParams;
   const expected = process.env.META_VERIFY_TOKEN ?? '';
   const got = q.get('hub.verify_token') ?? '';
@@ -28,7 +29,7 @@ interface WebhookBody {
   entry?: { id?: string; changes?: { field?: string; value?: Partial<LeadgenChange> }[] }[];
 }
 
-export async function POST(req: Request) {
+async function POST_handler(req: Request) {
   try {
     const raw = await req.text();
     if (!verifyMetaSignature(raw, req.headers.get('x-hub-signature-256'))) {
@@ -65,3 +66,6 @@ export async function POST(req: Request) {
     return errorResponse(err);
   }
 }
+
+export const GET = logged(GET_handler);
+export const POST = logged(POST_handler);

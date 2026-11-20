@@ -4,6 +4,7 @@ import { rateLimit } from '@/server/ratelimit';
 import { applyMapping } from '@/server/leads/mapping';
 import { ingestLead } from '@/server/leads/ingest';
 import { verifyWebhook, type LeadSource } from '@/server/leads/sources';
+import { logged } from '@/server/observability/request-log';
 
 /**
  * POST /hooks/leads/:key, public.
@@ -70,13 +71,13 @@ function parseBody(raw: string, contentType: string): Record<string, unknown> {
   throw new ApiError(400, 'bad_body', 'Body must be a JSON object or form-encoded');
 }
 
-export async function OPTIONS(req: Request, ctx: { params: Promise<{ key: string }> }) {
+async function OPTIONS_handler(req: Request, ctx: { params: Promise<{ key: string }> }) {
   const { key } = await ctx.params;
   const source = await loadSource(key);
   return new Response(null, { status: 204, headers: corsHeaders(source, req.headers.get('origin')) });
 }
 
-export async function POST(req: Request, ctx: { params: Promise<{ key: string }> }) {
+async function POST_handler(req: Request, ctx: { params: Promise<{ key: string }> }) {
   const origin = req.headers.get('origin');
   let cors: Record<string, string> = {};
   try {
@@ -156,3 +157,5 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
   }
 }
 
+export const OPTIONS = logged(OPTIONS_handler);
+export const POST = logged(POST_handler);

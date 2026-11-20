@@ -1,8 +1,9 @@
 import { withService } from '@/server/db';
 import { json } from '@/server/http';
+import { logged } from '@/server/observability/request-log';
 
 // GET /health: database reachable and migrations applied.
-export async function GET() {
+async function GET_handler() {
   try {
     const [r] = await withService((tx) => tx<{ ok: number; workspaces: number }[]>`
       select 1 as ok, (select count(*)::int from public.workspaces) as workspaces`);
@@ -12,3 +13,5 @@ export async function GET() {
   }
 }
 export const dynamic = 'force-dynamic';
+
+export const GET = logged(GET_handler);

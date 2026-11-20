@@ -823,6 +823,9 @@ export const allHandlers = [
     return json({ data: { marked_read: n } });
   })),
 
+  // TODO(mock): demo data for the status page and API logs (real data comes from api_request_logs).
+  http.get(`${BASE}/status`, () => json({ data: demoStatus() })),
+  http.get(`${BASE}/dev/logs`, withAuth({ allowWhenReadOnly: true }, (_ctx, req) => json(demoLogs(new URL(req.url))))),
   // TODO(mock): Google Calendar needs real Google OAuth; the demo shows "not set up".
   http.get(`${BASE}/integrations/google`, withAuth({ allowWhenReadOnly: true }, () => json({ data: { configured: false, connected: false, email: null, connected_at: null, last_synced_at: null, last_error: null, synced_count: 0 } }))),
   http.get(`${BASE}/notification-settings`, withAuth({ allowWhenReadOnly: true }, (ctx, _r, _p, db) => json({ data: notificationSettings(db, ctx) }))),
@@ -1387,4 +1390,84 @@ function seedSamples(db: MockDb, ws: MWorkspace, ownerId: string | null) {
 const SAMPLE_PREFIX: Record<string, string> = { US: '+1212555', AE: '+97150555', GB: '+447700900', PK: '+92300555', IN: '+9198765', SA: '+96650555', CA: '+1416555' };
 function samplePhone(country: string, i: number) {
   return `${SAMPLE_PREFIX[country] ?? '+1212555'}${String(1900 + i).padStart(4, '0')}`;
+}
+
+// ------------------------------------------------------------- demo observability
+
+function seeded(n: number) {
+  const x = Math.sin(n * 9301 + 49297) * 233280;
+  return x - Math.floor(x);
+}
+
+function demoStatus() {
+  const now = Date.now();
+  const hourly = Array.from({ length: 24 }, (_, i) => {
+    const hour = new Date(Math.floor(now / 3_600_000) * 3_600_000 - (23 - i) * 3_600_000).toISOString();
+    const requests = Math.round(80 + seeded(i) * 220 + (i > 8 && i < 20 ? 200 : 0));
+    const p50 = Math.round(60 + seeded(i + 50) * 50);
+    return { hour, requests, errors: seeded(i + 99) > 0.85 ? Math.round(seeded(i) * 4) + 1 : 0, p50_ms: p50, p95_ms: Math.round(p50 * (2.4 + seeded(i + 7))) };
+  });
+  const days = (key: string) => Array.from({ length: 30 }, (_, i) => {
+    const day = new Date(Math.floor(now / 86_400_000) * 86_400_000 - (29 - i) * 86_400_000).toISOString();
+    const r = seeded(i + key.length * 31);
+    return { day, uptime: i < 4 ? null : r > 0.94 ? 0.97 : 1, avg_ms: Math.round(40 + r * 60) };
+  });
+  const keys = ['api', 'database', 'auth', 'storage', 'jobs'] as const;
+  return {
+    overall: 'degraded',
+    checked_at: new Date(now).toISOString(),
+    components: [
+      { key: 'api', state: 'up', latency_ms: null },
+      { key: 'database', state: 'up', latency_ms: 38 },
+      { key: 'auth', state: 'up', latency_ms: 112 },
+      { key: 'storage', state: 'up', latency_ms: 96 },
+      { key: 'jobs', state: 'degraded', latency_ms: null },
+    ],
+    api: { requests_24h: hourly.reduce((a, h) => a + h.requests, 0), error_rate_24h: 0.0042, p50_ms: 84, p95_ms: 241, hourly },
+    history: Object.fromEntries(keys.map((k) => [k, days(k)])),
+  };
+}
+
+const DEMO_ROUTES: [string, string, number][] = [
+  ['GET', '/api/v1/contacts?limit=50', 200], ['GET', '/api/v1/me', 200], ['POST', '/api/v1/leads/quick-add', 201],
+  ['GET', '/api/v1/tasks?due=today', 200], ['POST', '/api/v1/deals/7f3c2a10-0000-4000-8000-000000000001/move', 200],
+  ['GET', '/api/v1/reports/funnel', 200], ['POST', '/api/v1/auth/login', 401], ['PATCH', '/api/v1/contacts/7f3c2a10-0000-4000-8000-000000000002', 422],
+  ['GET', '/api/v1/conversations', 200], ['POST', '/api/v1/webhooks/whatsapp', 200], ['GET', '/api/v1/reports/agents', 500],
+];
+
+function demoLogs(url: URL) {
+  const status = url.searchParams.get('status') ?? 'all';
+  const before = Number(url.searchParams.get('before') ?? 100000);
+  const q = (url.searchParams.get('q') ?? '').toLowerCase();
+  const rows = Array.from({ length: 300 }, (_, i) => {
+    const id = 100000 - i;
+    const [method, path, st] = DEMO_ROUTES[Math.floor(seeded(i) * DEMO_ROUTES.length)];
+    const signedIn = !path.includes('/auth/') && !path.includes('webhooks');
+    return {
+      id: String(id), at: new Date(Date.now() - i * 47_000).toISOString(), request_id: `iad1::demo-${id}`, method,
+      route: path.split('?')[0].replace(/[0-9a-f-]{36}/, ':id'), path, status: st,
+      duration_ms: Math.round(st === 500 ? 2300 : 30 + seeded(i + 3) ** 3 * 900),
+      error_code: st === 401 ? 'invalid_credentials' : st === 422 ? 'validation_failed' : st === 500 ? 'internal' : null,
+      ip: '203.0.113.0', user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', region: 'iad1',
+      user_id: signedIn ? 'u-demo' : null, user_name: signedIn ? 'Sarah Khan' : null, user_email: signedIn ? 'sarah@example.com' : null,
+      workspace_id: signedIn ? 'w-demo' : null, workspace_name: signedIn ? 'Skyline Realty' : null,
+    };
+  }).filter((r) => Number(r.id) < before)
+    .filter((r) => status === 'all' || (status === 'errors' ? r.status >= 400 : String(r.status)[0] === status[0]))
+    .filter((r) => !q || `${r.path} ${r.error_code ?? ''} ${r.user_email ?? ''}`.toLowerCase().includes(q));
+  const page = rows.slice(0, 100);
+  return {
+    data: page,
+    next_before: rows.length > 100 ? page[page.length - 1].id : null,
+    summary: {
+      requests: 1284, server_errors: 3, client_errors: 41, p50_ms: 84, p95_ms: 241, users: 12,
+      slowest_routes: [
+        { method: 'GET', route: '/api/v1/reports/agents', requests: 64, errors: 3, p95_ms: 1840 },
+        { method: 'GET', route: '/api/v1/reports/funnel', requests: 88, errors: 0, p95_ms: 620 },
+        { method: 'POST', route: '/api/v1/leads/quick-add', requests: 132, errors: 2, p95_ms: 410 },
+        { method: 'GET', route: '/api/v1/contacts', requests: 512, errors: 0, p95_ms: 260 },
+        { method: 'POST', route: '/api/v1/deals/:id/move', requests: 97, errors: 1, p95_ms: 190 },
+      ],
+    },
+  };
 }

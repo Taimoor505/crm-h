@@ -288,13 +288,14 @@ export function formatShortDate(value: DateInput, settings: Fmt & { timezone?: s
   }).format(d);
 }
 
-export function formatTime(value: DateInput, settings: Fmt & { timezone?: string; time_format?: '12h' | '24h' }): string {
+export function formatTime(value: DateInput, settings: Fmt & { timezone?: string; time_format?: '12h' | '24h' }, opts: { seconds?: boolean } = {}): string {
   const d = toDate(value);
   if (!d) return '—';
   return new Intl.DateTimeFormat(settings.locale, {
     timeZone: settings.timezone ?? 'UTC',
     hour: 'numeric',
     minute: '2-digit',
+    ...(opts.seconds ? { second: '2-digit' as const } : {}),
     hourCycle: settings.time_format === '24h' ? 'h23' : 'h12',
   }).format(d);
 }

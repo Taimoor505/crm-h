@@ -33,6 +33,7 @@ export const PERMISSIONS = {
   'partner.area': ['partner_admin'],
   'admin.console': ['super_admin'],
   'dev.workbench': ['super_admin'],
+  'dev.logs': ['super_admin'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

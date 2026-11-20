@@ -89,3 +89,14 @@ reassign moves it to the new owner's calendar. Until the two keys below are set,
 Refresh tokens are stored encrypted (AES-256-GCM). The key is `ENCRYPTION_KEY` if set, otherwise derived from
 `SUPABASE_JWT_SECRET`. Set a dedicated `ENCRYPTION_KEY` (32 random bytes, base64) before real use; changing it
 later means users reconnect Google.
+
+## API logs and status page
+
+- **/admin/logs** (platform admins only): every API call from the last 14 days with time, method, path,
+  status, duration, user, workspace, error code, request ID, truncated IP and browser. Filters for status,
+  method, time range, slow requests, search; live mode refreshes every 5 s. Bodies are never stored and
+  sensitive query values (token, code, state, key, password…) are masked.
+- **/status** (public): live checks of the API, database, Supabase Auth, storage and background jobs with
+  response times, API speed (median and 95th percentile) and volume for 24 hours, and 30-day uptime.
+- Add a developer: `insert into public.platform_admins (user_id) select id from auth.users where email = '<their email>';`
+- Logging can be turned off with `API_LOGS=off`.

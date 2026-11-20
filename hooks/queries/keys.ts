@@ -36,6 +36,9 @@ export const qk = {
   notificationSettings: (ws: string) => [ws, 'notification-settings'] as const,
   /** Per user, not per workspace. */
   googleCalendar: () => ['google-calendar'] as const,
+  /** Platform-wide (super-admins), not per workspace. */
+  apiLogs: (f: object) => ['api-logs', f] as const,
+  systemStatus: () => ['system-status'] as const,
 
   conversations: (ws: string) => [ws, 'conversations'] as const,
   messages: (ws: string, id: string) => [ws, 'messages', id] as const,

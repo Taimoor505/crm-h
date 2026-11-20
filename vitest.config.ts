@@ -21,6 +21,7 @@ export default defineConfig({
       ENCRYPTION_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
       META_APP_SECRET: 'meta-app-secret',
       META_VERIFY_TOKEN: 'verify-me',
+      API_LOGS: 'off',
     },
   },
 });

@@ -5,9 +5,10 @@ import {
 } from '@/server/integrations/google';
 import { originOf } from '@/server/integrations/calendar-hook';
 import { ApiError } from '@/server/http';
+import { logged } from '@/server/observability/request-log';
 
 // GET /integrations/google/callback: Google sends the browser here after consent.
-export async function GET(req: Request) {
+async function GET_handler(req: Request) {
   const url = new URL(req.url);
   const origin = originOf(req);
   const back = (status: string) => Response.redirect(`${origin}/settings/calendar?google=${status}`, 303);
@@ -31,3 +32,5 @@ export async function GET(req: Request) {
     return back('error');
   }
 }
+
+export const GET = logged(GET_handler);

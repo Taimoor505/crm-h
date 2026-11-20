@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPgPool, getState } from '@/lib/taimoor/store';
+import { logged } from '@/server/observability/request-log';
 
-export async function POST(req: NextRequest) {
+async function POST_handler(req: NextRequest) {
   try {
     const body = await req.json();
     const actorUserId = String(body?.actor_user_id || '');
@@ -137,3 +138,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
   }
 }
+
+export const POST = logged(POST_handler);
