@@ -108,6 +108,28 @@
   * {
     border-color: var(--border);
   }
+  /* Tailwind v4 dropped the pointer cursor on buttons; bring it back for everything clickable. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  [role='menuitem'],
+  [role='option'],
+  [role='switch'],
+  [role='checkbox'],
+  [role='radio'],
+  select:not(:disabled),
+  summary,
+  label:has(input:not(:disabled)),
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled),
+  input[type='color']:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
 
   html {
     font-family: var(--font-body), system-ui, sans-serif;
