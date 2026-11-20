@@ -99,3 +99,11 @@ export function OwnerAvatar({ name, userId, className }: { name: string | null |
     </span>
   );
 }
+
+/** A distinct colour per pipeline stage (by position); won/lost are fixed. */
+const STAGE_TONES = ['bg-sky-500', 'bg-indigo-500', 'bg-violet-500', 'bg-fuchsia-500', 'bg-amber-500', 'bg-cyan-500', 'bg-teal-500'];
+export function stageTone(index: number, kind: 'open' | 'won' | 'lost' = 'open'): string {
+  if (kind === 'won') return 'bg-emerald-500';
+  if (kind === 'lost') return 'bg-gray-400';
+  return STAGE_TONES[index % STAGE_TONES.length];
+}

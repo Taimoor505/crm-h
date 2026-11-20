@@ -28,7 +28,7 @@ export function DealCard({
   const overdue = deal.next_task_due_at ? isOverdue(deal.next_task_due_at) : false;
 
   return (
-    <div className={cn('lift rounded-xl border bg-card p-3.5 shadow-card', dragging && 'rotate-2 shadow-float ring-2 ring-brand', className)}>
+    <div className={cn('lift rounded-xl border bg-card p-3.5 shadow-card hover:border-gray-300', dragging && 'rotate-2 shadow-float ring-2 ring-brand', className)}>
       <div className="flex items-start justify-between gap-2">
         <Link href={`/contacts/${deal.contact_id}`} className="min-w-0 flex-1" onPointerDown={(e) => e.stopPropagation()}>
           <p className="truncate text-sm font-semibold text-gray-900 hover:underline">{deal.contact?.name ?? deal.title}</p>
@@ -36,10 +36,10 @@ export function DealCard({
         </Link>
         <OwnerAvatar userId={deal.owner_id} name={ownerName} />
       </div>
-      <MoneyText value={deal.value} className="mt-2 block font-heading text-base font-bold text-brand-ink" />
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
-        <span>{t('daysInStage', { count: days })}</span>
-        <span className={cn('inline-flex items-center gap-1', overdue && 'font-semibold text-red-700')}>
+      <MoneyText value={deal.value} className="mt-2.5 block font-heading text-lg font-bold tracking-tight text-gray-900" />
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+        <span className={cn('rounded-md px-1.5 py-0.5', days >= 14 ? 'bg-amber-50 text-amber-800' : 'bg-gray-100 text-gray-700')}>{t('daysInStage', { count: days })}</span>
+        <span className={cn('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5', overdue ? 'bg-red-50 text-red-700' : deal.next_task_due_at ? 'bg-brand-surface text-brand-ink' : 'bg-amber-50 text-amber-800')}>
           <CalendarClock className="size-3" aria-hidden="true" />
           {deal.next_task_due_at ? (
             <>

@@ -5,7 +5,7 @@
  * series, so it uses the brand hue only; the speed buckets use one hue light→
  * dark because they are ordered. Each chart ships with a hidden data table.
  */
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export interface BarDatum {
   label: string;
@@ -91,5 +91,49 @@ export function VBarChart({ data, caption, valueLabel, tickFormatter }: { data: 
       </div>
       <DataTable data={data} caption={caption} valueLabel={valueLabel} />
     </div>
+  );
+}
+
+function AreaTooltip({ active, payload }: { active?: boolean; payload?: { payload: { label: string; leads: number } }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-lg border bg-white px-3 py-2 text-xs shadow-float">
+      <p className="font-medium text-gray-900">{d.label}</p>
+      <p className="font-semibold tabular-nums text-brand-ink">{d.leads}</p>
+    </div>
+  );
+}
+
+/** Daily counts as a soft brand-filled area (Home). Hidden table for screen readers. */
+export function LeadsAreaChart({ data }: { data: { day: string; label: string; leads: number }[] }) {
+  return (
+    <>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
+          <defs>
+            <linearGradient id="leadsFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--brand-primary)" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="var(--brand-primary)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid vertical={false} stroke="var(--color-gray-100)" />
+          <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24} />
+          <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={40} />
+          <Tooltip content={<AreaTooltip />} cursor={{ stroke: 'var(--brand-primary)', strokeOpacity: 0.3 }} />
+          <Area type="monotone" dataKey="leads" stroke="var(--brand-primary)" strokeWidth={2.5} fill="url(#leadsFill)" activeDot={{ r: 4, strokeWidth: 0 }} isAnimationActive={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+      <table className="sr-only">
+        <tbody>
+          {data.map((d) => (
+            <tr key={d.day}>
+              <th scope="row">{d.label}</th>
+              <td>{d.leads}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }

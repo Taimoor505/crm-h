@@ -10,6 +10,7 @@ import type { Deal, Pipeline, Stage } from '@/lib/api/types';
 import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
 import { formatMoneyValue } from '@/lib/format';
 import { DealCard } from './DealCard';
+import { stageTone } from './badges';
 import { cn } from '@/lib/utils';
 
 function stageTotal(deals: Deal[], currency: string) {
@@ -25,16 +26,21 @@ function DraggableCard({ deal, ownerName, disabled }: { deal: Deal; ownerName: s
   );
 }
 
-function Column({ stage, deals, ownerName, disabled }: { stage: Stage; deals: Deal[]; ownerName: (id: string | null) => string | null; disabled: boolean }) {
+function Column({ stage, index, deals, ownerName, disabled }: { stage: Stage; index: number; deals: Deal[]; ownerName: (id: string | null) => string | null; disabled: boolean }) {
   const t = useTranslations('pipeline');
   const s = useWorkspaceSettings();
   const { setNodeRef, isOver } = useDroppable({ id: stage.id, data: { stage } });
   return (
-    <section aria-label={stage.name} className="flex w-72 shrink-0 flex-col rounded-2xl bg-card/60 ring-1 ring-black/5">
-      <header className={cn('flex items-baseline justify-between gap-2 rounded-t-2xl px-4 pt-4 pb-2', stage.kind === 'won' && 'text-green-800', stage.kind === 'lost' && 'text-gray-600')}>
-        <h2 className="truncate font-heading text-sm font-semibold">{stage.name}</h2>
-        <p className="shrink-0 text-xs font-medium text-gray-600 tabular-nums">
-          {t('stageTotal', { count: deals.length, value: formatMoneyValue(stageTotal(deals, s.currency), s, { compact: true }) })}
+    <section aria-label={stage.name} className="relative flex w-72 shrink-0 flex-col overflow-hidden rounded-2xl bg-gray-100/80 ring-1 ring-black/5">
+      <span aria-hidden="true" className={cn('absolute inset-x-0 top-0 h-1', stageTone(index, stage.kind))} />
+      <header className="space-y-1 px-4 pt-4 pb-2">
+        <div className="flex items-center gap-2">
+          <span aria-hidden="true" className={cn('size-2.5 shrink-0 rounded-full', stageTone(index, stage.kind))} />
+          <h2 className="flex-1 truncate font-heading text-sm font-semibold text-gray-900">{stage.name}</h2>
+          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-gray-700 tabular-nums shadow-card">{deals.length}</span>
+        </div>
+        <p className="ps-[18px] text-sm font-semibold text-gray-700 tabular-nums">
+          {formatMoneyValue(stageTotal(deals, s.currency), s, { compact: true })}
         </p>
       </header>
       <div ref={setNodeRef} className={cn('stagger flex min-h-32 flex-1 flex-col gap-2.5 overflow-y-auto rounded-b-2xl p-2.5 transition-colors', isOver && 'bg-brand-surface ring-2 ring-brand/50 ring-inset')}>
@@ -88,8 +94,8 @@ export default function Kanban({
       }}
     >
       <div className="flex min-h-[60vh] gap-3 overflow-x-auto pb-4">
-        {pipeline.stages.map((stage) => (
-          <Column key={stage.id} stage={stage} deals={deals.filter((d) => d.stage_id === stage.id)} ownerName={ownerName} disabled={disabled} />
+        {pipeline.stages.map((stage, i) => (
+          <Column key={stage.id} stage={stage} index={i} deals={deals.filter((d) => d.stage_id === stage.id)} ownerName={ownerName} disabled={disabled} />
         ))}
       </div>
       <DragOverlay>{active ? <DealCard deal={active} ownerName={ownerName(active.owner_id)} dragging className="w-68" /> : null}</DragOverlay>

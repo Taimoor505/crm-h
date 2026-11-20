@@ -219,6 +219,8 @@ function Leads() {
   );
 }
 
+const LEAD_COLS = 'grid-cols-[minmax(0,2.6fr)_7rem_minmax(0,1fr)_minmax(0,1.3fr)_7rem_6rem]';
+
 function VirtualList({
   rows, selecting, selected, onToggle, ownerName, showOwner, hasMore, loadingMore, onEndReached,
 }: {
@@ -252,6 +254,14 @@ function VirtualList({
 
   return (
     <div ref={listRef}>
+      <div aria-hidden="true" className={cn('hidden items-center gap-4 border-b bg-gray-50/80 px-5 py-2.5 text-xs font-semibold tracking-wide text-gray-600 uppercase lg:grid', selecting && 'ps-14', LEAD_COLS)}>
+        <span>{t('colLead')}</span>
+        <span>{t('colStatus')}</span>
+        <span>{t('colSource')}</span>
+        <span>{showOwner ? t('colOwner') : ''}</span>
+        <span>{t('colActivity')}</span>
+        <span className="text-end">{t('colAdded')}</span>
+      </div>
       <ul role="list" style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
         {items.map((item) => {
           const c = rows[item.index];
@@ -264,7 +274,7 @@ function VirtualList({
               style={{ transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)` }}
             >
               {c ? (
-                <div className={cn('flex items-center gap-3 px-4 py-3', selected.has(c.id) && 'bg-brand-surface/60')}>
+                <div className={cn('flex items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 lg:px-5', selected.has(c.id) && 'bg-brand-surface/60')}>
                   {selecting && (
                     <Checkbox checked={selected.has(c.id)} onCheckedChange={() => onToggle(c.id)} aria-label={t('selectLead', { name: c.name })} className="size-5" />
                   )}
@@ -276,22 +286,47 @@ function VirtualList({
                         onToggle(c.id);
                       }
                     }}
-                    className="flex min-w-0 flex-1 items-center gap-3"
+                    className="group flex min-w-0 flex-1 items-center gap-3"
                   >
-                    <Avatar name={c.name} seed={c.id} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-gray-900">{c.name}</p>
-                        <StatusBadge status={c.status} className="shrink-0" />
+                    {/* Phone: stacked row */}
+                    <div className="flex min-w-0 flex-1 items-center gap-3 lg:hidden">
+                      <Avatar name={c.name} seed={c.id} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-gray-900">{c.name}</p>
+                          <StatusBadge status={c.status} className="shrink-0" />
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-600">
+                          <PhoneText e164={c.phone_e164} className="truncate" />
+                          <SourceBadge source={c.source} className="hidden shrink-0 sm:inline-flex" />
+                        </div>
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-600">
-                        <PhoneText e164={c.phone_e164} className="truncate" />
-                        <SourceBadge source={c.source} className="hidden shrink-0 sm:inline-flex" />
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <RelativeTime iso={c.created_at} className="text-xs text-gray-500" />
+                        {showOwner && <OwnerAvatar userId={c.owner_id} name={ownerName(c.owner_id)} />}
                       </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <RelativeTime iso={c.created_at} className="text-xs text-gray-500" />
-                      {showOwner && <OwnerAvatar userId={c.owner_id} name={ownerName(c.owner_id)} />}
+                    {/* Desktop: table columns */}
+                    <div className={cn('hidden min-w-0 flex-1 items-center gap-4 lg:grid', LEAD_COLS)}>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Avatar name={c.name} seed={c.id} />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-900 group-hover:text-brand-ink">{c.name}</p>
+                          <PhoneText e164={c.phone_e164} className="block truncate text-xs text-gray-600" />
+                        </div>
+                      </div>
+                      <div><StatusBadge status={c.status} /></div>
+                      <div className="min-w-0"><SourceBadge source={c.source} /></div>
+                      <div className="flex min-w-0 items-center gap-2 text-sm text-gray-700">
+                        {showOwner ? (
+                          <>
+                            <OwnerAvatar userId={c.owner_id} name={ownerName(c.owner_id)} />
+                            <span className="truncate">{ownerName(c.owner_id) ?? t('unassigned')}</span>
+                          </>
+                        ) : null}
+                      </div>
+                      <RelativeTime iso={c.last_activity_at ?? c.updated_at} className="text-sm text-gray-600" />
+                      <RelativeTime iso={c.created_at} className="text-end text-sm text-gray-500" />
                     </div>
                   </Link>
                 </div>

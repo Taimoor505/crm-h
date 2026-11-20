@@ -429,7 +429,20 @@
     "colUntouched": "Untouched",
     "untouchedHigh": "{count} untouched leads",
     "colDoneShort": "Done",
-    "colUntouchedShort": "Waiting"
+    "colUntouchedShort": "Waiting",
+    "heroSummary": "{due, plural, =0 {Nothing due today} one {# follow-up due today} other {# follow-ups due today}}{overdue, plural, =0 {} other { · # overdue}} · {fresh, plural, =0 {no new leads yet} one {# new lead} other {# new leads}}",
+    "heroAdd": "Add lead",
+    "heroFollowUps": "Open follow-ups",
+    "kpiOverdueHint": "Clear these first",
+    "kpiOverdueNone": "All caught up",
+    "kpiDueHint": "Before the end of the day",
+    "kpiNewHint": "{count, plural, =0 {All replied} one {# waiting for a reply} other {# waiting for a reply}}",
+    "kpiSpeedHint": "Median today",
+    "trendTitle": "Leads, last 14 days",
+    "trendTotal": "{count, plural, one {# lead} other {# leads}}",
+    "trendEmpty": "Leads will chart here as they arrive.",
+    "sourcesTitle": "Top sources",
+    "sourcesEmpty": "No leads in the last 14 days."
   },
   "regionFields": {
     "sqft": "Square feet",
@@ -483,7 +496,14 @@
     "bulkPartial": "Updated {ok} of {total}. Some couldn't be changed.",
     "exported": "Exported {count, plural, one {# lead} other {# leads}}",
     "loadingMore": "Loading more leads…",
-    "end": "That's everyone."
+    "end": "That's everyone.",
+    "colLead": "Lead",
+    "colStatus": "Status",
+    "colSource": "Source",
+    "colOwner": "Owner",
+    "colActivity": "Last activity",
+    "colAdded": "Added",
+    "unassigned": "Unassigned"
   },
   "contact": {
     "back": "Back to leads",

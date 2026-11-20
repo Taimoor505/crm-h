@@ -3,7 +3,9 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, CalendarCheck, ChevronRight, Timer, UserPlus } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, ChevronRight, Plus, Timer, UserPlus } from 'lucide-react';
+import { openQuickAdd } from '@/lib/ui-store';
+import { LeadsAreaChart } from '@/components/crm/ReportCharts';
 import { useHomeSummary, useReport } from '@/hooks/queries/work';
 import { useAllDeals, useMemberNames, usePipelines } from '@/hooks/queries/crm';
 import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
@@ -12,7 +14,7 @@ import { usePermissions } from '@/lib/permissions';
 import { dayKey, formatDate, formatDuration, formatMoneyValue, formatNumber, formatWeekday, zonedParts } from '@/lib/format';
 import type { HomeSummary, Task } from '@/lib/api/types';
 import { Section } from '@/components/layout/PageHeader';
-import { SourceBadge, Avatar } from '@/components/crm/badges';
+import { SourceBadge, Avatar, stageTone } from '@/components/crm/badges';
 import { RelativeTime, TimeText } from '@/components/crm/values';
 import { CallButton, DoneButton, WhatsAppButton } from '@/components/crm/ContactActions';
 import { CardSkeleton, EmptyState, ErrorState, ListSkeleton } from '@/components/crm/states';
@@ -30,39 +32,65 @@ export default function HomePage() {
   const team = can('home.team');
   const [scope, setScope] = useState<'me' | 'team'>(team ? 'team' : 'me');
   const summary = useHomeSummary(team ? scope : 'me');
+  const { canWrite } = usePermissions();
 
   const hour = zonedParts(new Date(), s.timezone).hour;
   const greeting = hour < 12 ? 'greetingMorning' : hour < 18 ? 'greetingAfternoon' : 'greetingEvening';
 
+  const d = summary.data;
   return (
     <div className="space-y-5 lg:space-y-7">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-[22px] font-bold tracking-tight lg:text-[28px]">{t(greeting, { name: firstName(me?.user.name) || '' })}</h1>
-          <p className="mt-1 text-sm text-gray-600">{formatWeekday(new Date(), s)}, {formatDate(new Date(), s)}</p>
+      <section className="relative isolate overflow-hidden rounded-3xl bg-brand-ink px-5 pt-6 pb-20 text-white shadow-raised lg:px-8 lg:pt-8 lg:pb-24">
+        {/* Brand light + a faint grid give the hero depth for any partner colour. */}
+        <div aria-hidden="true" className="absolute inset-0 -z-10 bg-[radial-gradient(80%_140%_at_100%_0%,var(--brand-primary)_0%,transparent_65%)]" />
+        <div aria-hidden="true" className="absolute inset-0 -z-10 opacity-[0.12] [background-image:linear-gradient(rgb(255_255_255/0.5)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.5)_1px,transparent_1px)] [background-size:32px_32px] [mask-image:radial-gradient(70%_100%_at_100%_0%,black,transparent)]" />
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-wider text-white/70 uppercase">{formatWeekday(new Date(), s)}, {formatDate(new Date(), s)}</p>
+            <h1 className="mt-2 font-heading text-[26px] leading-tight font-bold tracking-tight lg:text-[34px]">{t(greeting, { name: firstName(me?.user.name) || '' })}</h1>
+            {d && (
+              <p className="mt-2 text-sm text-white/80 lg:text-base">
+                {t('heroSummary', { due: d.tasks.due_today, overdue: d.tasks.overdue, fresh: d.leads.new_today })}
+              </p>
+            )}
+            <div className="mt-5 flex flex-wrap gap-2">
+              {canWrite && (
+                <button type="button" onClick={() => openQuickAdd()} className="press inline-flex h-11 items-center gap-2 rounded-[10px] bg-white px-4 text-sm font-semibold text-gray-900 shadow-raised hover:bg-gray-50">
+                  <Plus className="size-4" aria-hidden="true" />
+                  {t('heroAdd')}
+                </button>
+              )}
+              <Link href="/follow-ups" className="press inline-flex h-11 items-center gap-2 rounded-[10px] bg-white/10 px-4 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur hover:bg-white/15">
+                <CalendarCheck className="size-4" aria-hidden="true" />
+                {t('heroFollowUps')}
+              </Link>
+            </div>
+          </div>
+          {team && (
+            <Segmented
+              ariaLabel={t('scope')}
+              value={scope}
+              onChange={setScope}
+              options={[
+                { value: 'me', label: t('mine') },
+                { value: 'team', label: t('team') },
+              ]}
+            />
+          )}
         </div>
-        {team && (
-          <Segmented
-            ariaLabel={t('scope')}
-            value={scope}
-            onChange={setScope}
-            options={[
-              { value: 'me', label: t('mine') },
-              { value: 'team', label: t('team') },
-            ]}
-          />
-        )}
-      </div>
-
-      <Suspense>
-        <SampleDataBanner />
-      </Suspense>
+      </section>
 
       {summary.isError ? (
         <ErrorState onRetry={() => summary.refetch()} />
       ) : (
         <>
-          <Kpis data={summary.data} />
+          <div className="relative -mt-16 px-2 lg:-mt-20 lg:px-5">
+            <Kpis data={summary.data} />
+          </div>
+          <Suspense>
+            <SampleDataBanner />
+          </Suspense>
+          <LeadsTrend />
           <div className="grid items-stretch gap-4 lg:grid-cols-2 lg:gap-6">
             <FollowUpsBlock data={summary.data} loading={summary.isLoading} />
             <NewLeadsBlock data={summary.data} loading={summary.isLoading} />
@@ -89,24 +117,89 @@ function Kpis({ data }: { data?: HomeSummary }) {
   }
   const num = (n: number) => formatNumber(n, s);
   const items = [
-    { label: t('overdue'), value: <CountUp value={data.tasks.overdue} format={num} />, icon: AlertTriangle, chip: data.tasks.overdue > 0 ? 'bg-red-50 text-red-700' : 'bg-brand-surface text-brand-ink', tone: data.tasks.overdue > 0 ? 'text-red-700' : 'text-gray-900', href: '/follow-ups?tab=overdue' },
-    { label: t('dueToday'), value: <CountUp value={data.tasks.due_today} format={num} />, icon: CalendarCheck, chip: 'bg-brand-surface text-brand-ink', tone: 'text-gray-900', href: '/follow-ups' },
-    { label: t('newToday'), value: <CountUp value={data.leads.new_today} format={num} />, icon: UserPlus, chip: 'bg-brand-surface text-brand-ink', tone: 'text-gray-900', href: '/leads' },
-    { label: t('speedToLead'), value: formatDuration(data.speed_to_lead_today.median_seconds, s), icon: Timer, chip: 'bg-brand-surface text-brand-ink', tone: 'text-gray-900', href: '/reports', hint: t('speedHint') },
+    { label: t('overdue'), value: <CountUp value={data.tasks.overdue} format={num} />, icon: AlertTriangle, tile: 'from-red-500 to-rose-600', tone: data.tasks.overdue > 0 ? 'text-red-700' : 'text-gray-900', hint: data.tasks.overdue > 0 ? t('kpiOverdueHint') : t('kpiOverdueNone'), href: '/follow-ups?tab=overdue' },
+    { label: t('dueToday'), value: <CountUp value={data.tasks.due_today} format={num} />, icon: CalendarCheck, tile: 'from-brand to-brand-ink', tone: 'text-gray-900', hint: t('kpiDueHint'), href: '/follow-ups' },
+    { label: t('newToday'), value: <CountUp value={data.leads.new_today} format={num} />, icon: UserPlus, tile: 'from-emerald-500 to-teal-600', tone: 'text-gray-900', hint: t('kpiNewHint', { count: data.leads.awaiting_first_response }), href: '/leads' },
+    { label: t('speedToLead'), value: formatDuration(data.speed_to_lead_today.median_seconds, s), icon: Timer, tile: 'from-amber-400 to-orange-500', tone: 'text-gray-900', hint: t('kpiSpeedHint'), href: '/reports', title: t('speedHint') },
   ];
   return (
     <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
       {items.map((k) => (
-        <Link key={k.label} href={k.href} title={k.hint} className="lift flex min-h-[104px] flex-col justify-between rounded-2xl border bg-card p-4 shadow-card">
+        <Link key={k.label} href={k.href} title={k.title} className="lift group flex min-h-[132px] flex-col justify-between rounded-2xl border bg-card p-4 shadow-raised lg:p-5">
           <span className="flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-gray-600 lg:text-sm">{k.label}</span>
-            <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', k.chip)} aria-hidden="true">
-              <k.icon className="size-4" />
+            <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white shadow-card', k.tile)} aria-hidden="true">
+              <k.icon className="size-[18px]" />
             </span>
           </span>
-          <span className={cn('font-heading text-[28px] leading-none font-bold tracking-tight tabular-nums', k.tone)}>{k.value}</span>
+          <span className={cn('font-heading text-[30px] leading-none font-bold tracking-tight tabular-nums lg:text-[34px]', k.tone)}>{k.value}</span>
+          <span className="flex items-center justify-between gap-1 text-xs text-gray-600">
+            <span className="truncate">{k.hint}</span>
+            <ChevronRight className="size-3.5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 rtl:rotate-180" aria-hidden="true" />
+          </span>
         </Link>
       ))}
+    </div>
+  );
+}
+
+/** Leads per day for the last 14 days, plus the top sources. */
+function LeadsTrend() {
+  const t = useTranslations('home');
+  const s = useWorkspaceSettings();
+  // Fixed for the life of the page so the query key stays stable.
+  const [now] = useState(() => Date.now());
+  const today = dayKey(new Date(now), s.timezone);
+  const from = dayKey(new Date(now - 13 * 86400_000), s.timezone);
+  const r = useReport('sources', { from, to: today });
+
+  const { days, sources, total } = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of r.data?.by_day ?? []) counts.set(row.day, (counts.get(row.day) ?? 0) + row.leads);
+    const out: { day: string; label: string; leads: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const key = dayKey(new Date(now - i * 86400_000), s.timezone);
+      out.push({ day: key, label: formatDate(key, { ...s, date_format: 'dd MMM' }), leads: counts.get(key) ?? 0 });
+    }
+    const top = (r.data?.by_source ?? []).slice(0, 5);
+    return { days: out, sources: top, total: r.data?.total ?? 0 };
+  }, [r.data, s, now]);
+  const max = Math.max(1, ...sources.map((x) => x.leads));
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3 lg:gap-6">
+      <Section title={t('trendTitle')} action={<span className="text-sm font-semibold text-gray-900 tabular-nums">{t('trendTotal', { count: total })}</span>} className="lg:col-span-2">
+        {r.isLoading ? (
+          <div className="px-5 pb-5"><CardSkeleton className="h-48 rounded-xl" /></div>
+        ) : total ? (
+          <div className="h-52 px-2 pb-3">
+            <LeadsAreaChart data={days} />
+          </div>
+        ) : (
+          <EmptyState title={t('trendEmpty')} className="py-8" />
+        )}
+      </Section>
+      <Section title={t('sourcesTitle')}>
+        {r.isLoading ? (
+          <ListSkeleton rows={4} />
+        ) : sources.length ? (
+          <ul className="space-y-3 px-5 pb-5">
+            {sources.map((x) => (
+              <li key={x.source} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <SourceBadge source={x.source} />
+                  <span className="font-semibold tabular-nums">{formatNumber(x.leads, s)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-full rounded-full bg-gradient-to-r from-brand to-brand-accent" style={{ width: `${Math.max(4, (x.leads / max) * 100)}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState title={t('sourcesEmpty')} className="py-8" />
+        )}
+      </Section>
     </div>
   );
 }
@@ -237,6 +330,7 @@ function PipelineSnapshot() {
         return { ...st, count: inStage.length, value: { amount_minor: minor, currency } };
       });
   }, [pipeline, deals.data, s.currency]);
+  const total = stages.reduce((a, st) => a + st.value.amount_minor, 0);
 
   return (
     <Section title={pipeline ? `${t('pipelineTitle')} · ${pipeline.name}` : t('pipelineTitle')}>
@@ -248,15 +342,25 @@ function PipelineSnapshot() {
         </div>
       ) : stages.length ? (
         <ul className="stagger scrollbar-none grid snap-x auto-cols-[minmax(11rem,1fr)] grid-flow-col gap-3 overflow-x-auto px-5 pb-5">
-          {stages.map((st) => (
-            <li key={st.id} className="snap-start">
-              <Link href={`/pipeline?pipeline=${pipeline!.id}&stage=${st.id}`} className="lift block h-full rounded-2xl bg-brand-surface/70 p-4">
-                <p className="truncate text-xs font-medium text-gray-700">{st.name}</p>
-                <p className="mt-2 font-heading text-xl font-bold tracking-tight tabular-nums text-brand-ink">{formatMoneyValue(st.value, s, { compact: true })}</p>
-                <p className="text-xs text-gray-600">{t('dealsCount', { count: st.count })}</p>
-              </Link>
-            </li>
-          ))}
+          {stages.map((st, i) => {
+            const share = total ? st.value.amount_minor / total : 0;
+            return (
+              <li key={st.id} className="snap-start">
+                <Link href={`/pipeline?pipeline=${pipeline!.id}&stage=${st.id}`} className="lift relative block h-full overflow-hidden rounded-2xl border bg-card p-4">
+                  <span aria-hidden="true" className={cn('absolute inset-x-0 top-0 h-1', stageTone(i))} />
+                  <p className="flex items-center gap-2 truncate text-xs font-medium text-gray-700">
+                    <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', stageTone(i))} />
+                    {st.name}
+                  </p>
+                  <p className="mt-2 font-heading text-xl font-bold tracking-tight tabular-nums text-gray-900">{formatMoneyValue(st.value, s, { compact: true })}</p>
+                  <p className="text-xs text-gray-600">{t('dealsCount', { count: st.count })}</p>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100" aria-hidden="true">
+                    <div className={cn('h-full rounded-full', stageTone(i))} style={{ width: `${Math.max(3, share * 100)}%` }} />
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <EmptyState title={t('pipelineEmpty')} className="py-6" />

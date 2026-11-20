@@ -88,7 +88,7 @@ function ContactView({ contact }: { contact: Contact }) {
   const primaryPipeline = pipelines.data?.find((p) => p.id === primaryDeal?.pipeline_id) ?? null;
   const primaryStage = primaryPipeline?.stages.find((s) => s.id === primaryDeal?.stage_id) ?? null;
 
-  const actionBtn = 'flex min-h-16 min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-1 rounded-xl border bg-white px-1 text-xs font-medium text-gray-800 hover:bg-gray-50';
+  const actionBtn = 'flex min-h-16 min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-1 rounded-xl border bg-white px-1 text-xs font-semibold text-gray-800 shadow-card transition-colors hover:border-gray-300 hover:bg-gray-50 [&_svg]:text-brand-ink';
 
   return (
     <div className="space-y-4">
@@ -130,12 +130,19 @@ function ContactView({ contact }: { contact: Contact }) {
         )}
       </div>
 
-      <header className="rounded-2xl border bg-card p-4 shadow-card">
-        <div className="flex items-start gap-3">
-          <Avatar name={contact.name} seed={contact.id} size="lg" />
+      <header className="overflow-hidden rounded-2xl border bg-card shadow-card">
+        <div aria-hidden="true" className="relative h-20 bg-brand-ink lg:h-24">
+          <div className="absolute inset-0 bg-[radial-gradient(70%_160%_at_100%_0%,var(--brand-primary),transparent_70%)]" />
+          <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgb(255_255_255/0.5)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.5)_1px,transparent_1px)] [background-size:28px_28px] [mask-image:linear-gradient(to_left,black,transparent)]" />
+        </div>
+        <div className="px-4 pb-4 lg:px-6 lg:pb-5">
+        <div className="relative z-10 -mt-8 flex items-end gap-3 lg:-mt-10">
+          <Avatar name={contact.name} seed={contact.id} size="lg" className="size-16 text-xl ring-4 ring-white lg:size-20 lg:text-2xl" />
+        </div>
+        <div className="mt-3 flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-heading text-xl font-bold break-words text-gray-900">{contact.name}</h1>
+              <h1 className="font-heading text-xl font-bold tracking-tight break-words text-gray-900 lg:text-2xl">{contact.name}</h1>
               <StatusBadge status={contact.status} />
             </div>
             <button
@@ -158,7 +165,7 @@ function ContactView({ contact }: { contact: Contact }) {
             )}
           </div>
         </div>
-        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
+        <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-gray-100 text-sm sm:grid-cols-4 [&>div]:bg-gray-50/80 [&>div]:px-3 [&>div]:py-2.5">
           <div>
             <dt className="text-xs text-gray-500">{t('source')}</dt>
             <dd className="mt-0.5"><SourceBadge source={contact.source} /></dd>
@@ -177,11 +184,12 @@ function ContactView({ contact }: { contact: Contact }) {
           </div>
         </dl>
         <TagEditor contact={contact} />
+        </div>
       </header>
 
       <div className="flex gap-2">
-        <CallButton contactId={contact.id} name={contact.name} phone={contact.phone_e164} dealId={primaryDeal?.id} className="min-h-16 min-w-0 flex-1 basis-0 flex-col justify-center gap-1 rounded-xl px-1 text-xs" label />
-        <WhatsAppButton contactId={contact.id} name={contact.name} phone={contact.phone_e164} className="min-h-16 min-w-0 flex-1 basis-0 flex-col justify-center gap-1 rounded-xl px-1 text-xs" label />
+        <CallButton contactId={contact.id} name={contact.name} phone={contact.phone_e164} dealId={primaryDeal?.id} className="min-h-16 min-w-0 flex-1 basis-0 flex-col justify-center gap-1 rounded-xl border-transparent bg-brand px-1 text-xs font-semibold text-on-brand shadow-card hover:bg-brand-hover" label />
+        <WhatsAppButton contactId={contact.id} name={contact.name} phone={contact.phone_e164} className="min-h-16 min-w-0 flex-1 basis-0 flex-col justify-center gap-1 rounded-xl border-transparent bg-emerald-700 px-1 text-xs font-semibold text-white shadow-card hover:bg-emerald-800 [&_*]:text-white" label />
         {canWrite && (
           <>
             <button type="button" className={actionBtn} onClick={() => setSheet('followup')}>
