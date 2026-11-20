@@ -111,7 +111,7 @@ function CreateWorkspaceSheet({ onClose }: { onClose: () => void }) {
       open
       wide
       onOpenChange={(o) => !o && onClose()}
-      title={t('createTitle')}
+      title={t('createTitle')} icon={Building2}
       footer={
         <Button
           className="h-11 w-full"

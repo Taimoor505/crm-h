@@ -12,6 +12,7 @@ import { countUsefulAction, type PendingCall } from '@/lib/ui-store';
 import type { CallOutcome, Task } from '@/lib/api/types';
 import { ResponsiveSheet } from './ResponsiveSheet';
 import { Chip, DuePicker } from './DuePicker';
+import { PhoneCall } from 'lucide-react';
 
 const OUTCOMES: CallOutcome[] = ['answered', 'no_answer', 'busy', 'wrong_number'];
 
@@ -47,7 +48,7 @@ export default function CallOutcomeSheet({ call, onClose }: { call: PendingCall;
     <ResponsiveSheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t('title')}
+      title={t('title')} icon={PhoneCall}
       description={t('with', { name: call.contactName })}
       footer={
         <div className="flex w-full gap-2">

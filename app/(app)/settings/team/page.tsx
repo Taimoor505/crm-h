@@ -118,7 +118,7 @@ function InviteSheet({ roles, onClose }: { roles: WorkspaceRole[]; onClose: () =
     <ResponsiveSheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t('inviteTitle')}
+      title={t('inviteTitle')} icon={UserPlus}
       footer={
         <Button
           className="h-11 w-full"

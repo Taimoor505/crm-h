@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Receipt } from 'lucide-react';
+import { Receipt, CreditCard, Sparkles} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -131,7 +131,7 @@ function PlanSheet({ current, onClose }: { current: string | null; onClose: () =
   const plans = usePlans();
   const change = useChangePlan();
   return (
-    <ResponsiveSheet open onOpenChange={(o) => !o && onClose()} title={t('choosePlan')}>
+    <ResponsiveSheet open onOpenChange={(o) => !o && onClose()} title={t('choosePlan')} icon={Sparkles}>
       {plans.isLoading ? (
         <ListSkeleton rows={3} />
       ) : (
@@ -170,7 +170,7 @@ function PaymentSheet({ invoice, onClose }: { invoice: Invoice; onClose: () => v
     <ResponsiveSheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t('paymentTitle')}
+      title={t('paymentTitle')} icon={CreditCard}
       description={t('paymentHint')}
       footer={
         <Button

@@ -11,6 +11,7 @@ import { countUsefulAction } from '@/lib/ui-store';
 import type { Deal, Pipeline, Stage } from '@/lib/api/types';
 import { ResponsiveSheet } from './ResponsiveSheet';
 import { Chip } from './DuePicker';
+import { ArrowRightLeft, CircleX, Trophy } from 'lucide-react';
 
 /**
  * Asks for a reason when a deal moves to Won or Lost (one tap on a preset),
@@ -49,7 +50,7 @@ export function ReasonSheet({
   }
 
   return (
-    <ResponsiveSheet open={open} onOpenChange={onOpenChange} title={won ? t('wonTitle') : t('lostTitle')} description={deal.title}>
+    <ResponsiveSheet open={open} onOpenChange={onOpenChange} title={won ? t('wonTitle') : t('lostTitle')} icon={won ? Trophy : CircleX} tone={won ? 'success' : 'danger'} description={deal.title}>
       <div className="space-y-4">
         <div className="grid gap-2">
           {presets.map((p) => (
@@ -92,7 +93,7 @@ export function MoveDealSheet({ open, onOpenChange, deal, pipeline }: { open: bo
 
   return (
     <>
-      <ResponsiveSheet open={open && !closing} onOpenChange={onOpenChange} title={t('moveTitle')} description={deal.title}>
+      <ResponsiveSheet open={open && !closing} onOpenChange={onOpenChange} title={t('moveTitle')} icon={ArrowRightLeft} description={deal.title}>
         <fieldset>
           <legend className="mb-2 text-sm font-medium">{t('moveTo')}</legend>
           <div className="flex flex-wrap gap-2">

@@ -187,7 +187,7 @@ function AddSourceSheet({ onClose, onCreated }: { onClose: () => void; onCreated
     <ResponsiveSheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t('addTitle')}
+      title={t('addTitle')} icon={Plug}
       footer={
         <Button
           className="h-11 w-full"

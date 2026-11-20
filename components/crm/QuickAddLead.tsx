@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronDown, TriangleAlert } from 'lucide-react';
+import { ChevronDown, TriangleAlert, UserPlus} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,7 +79,7 @@ export default function QuickAddLead({ prefill }: { prefill: { phone?: string; n
   }
 
   return (
-    <ResponsiveSheet open onOpenChange={(o) => !o && closeQuickAdd()} title={t('title')}>
+    <ResponsiveSheet open onOpenChange={(o) => !o && closeQuickAdd()} title={t('title')} icon={UserPlus}>
       <form onSubmit={submit} className="space-y-4" noValidate>
         <div className="space-y-1.5">
           <Label htmlFor="qa-name">{t('name')}</Label>

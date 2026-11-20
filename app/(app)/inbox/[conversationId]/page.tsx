@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowLeft, Check, CheckCheck, FileText, Send } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, FileText, Send, MessageSquareText} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useConversations, useLogWhatsApp, useMessages, useSavedReplies, useSendMessage, useWhatsAppTemplates } from '@/hooks/queries/work';
@@ -203,7 +203,7 @@ function TemplatesSheet({ name, onClose, onUse }: { name: string; onClose: () =>
   const templates = useWhatsAppTemplates();
   const fill = (tpl: WhatsAppTemplate) => tpl.body.replace('{{1}}', firstName(name));
   return (
-    <ResponsiveSheet open onOpenChange={(o) => !o && onClose()} title={t('templatesTitle')} description={t('templatesHint')}>
+    <ResponsiveSheet open onOpenChange={(o) => !o && onClose()} title={t('templatesTitle')} icon={MessageSquareText} description={t('templatesHint')}>
       {templates.isLoading ? (
         <ListSkeleton rows={3} />
       ) : (

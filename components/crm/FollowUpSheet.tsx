@@ -16,6 +16,7 @@ import { countUsefulAction } from '@/lib/ui-store';
 import type { Task, TaskType } from '@/lib/api/types';
 import { ResponsiveSheet } from './ResponsiveSheet';
 import { Chip, DuePicker } from './DuePicker';
+import { CalendarClock, CalendarPlus } from 'lucide-react';
 
 const TYPES: TaskType[] = ['call', 'whatsapp', 'meeting', 'site_visit', 'other'];
 
@@ -36,7 +37,7 @@ export function FollowUpSheet({ open, onOpenChange, contactId, dealId }: { open:
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={t('title')}
+      title={t('title')} icon={CalendarPlus}
       footer={
         <Button
           className="h-11 w-full"
@@ -107,7 +108,7 @@ export function RescheduleSheet({ open, onOpenChange, task }: { open: boolean; o
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={t('rescheduleTitle')}
+      title={t('rescheduleTitle')} icon={CalendarClock}
       description={task.title}
       footer={
         <Button

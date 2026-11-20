@@ -16,6 +16,7 @@ import { currencySymbol, fromMinor } from '@/lib/format';
 import { qk } from '@/hooks/queries/keys';
 import type { Deal } from '@/lib/api/types';
 import { ResponsiveSheet } from './ResponsiveSheet';
+import { HandCoins } from 'lucide-react';
 
 /** Create a deal for a lead, or edit an existing one. */
 export function DealSheet({ open, onOpenChange, contactId, contactName, deal }: { open: boolean; onOpenChange: (o: boolean) => void; contactId: string; contactName?: string; deal?: Deal }) {
@@ -64,7 +65,7 @@ export function DealSheet({ open, onOpenChange, contactId, contactName, deal }: 
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={deal ? t('editTitle') : t('newTitle')}
+      title={deal ? t('editTitle') : t('newTitle')} icon={HandCoins}
       footer={
         <Button className="h-11 w-full" onClick={save} disabled={!title.trim() || saving || create.isPending}>
           {t('save')}

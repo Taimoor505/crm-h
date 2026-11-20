@@ -18,10 +18,14 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { DealCard } from '@/components/crm/DealCard';
 import { ReasonSheet } from '@/components/crm/MoveDealSheet';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/crm/states';
+import { BoardSkeleton, DealCardSkeletons } from '@/components/crm/PipelineSkeleton';
 import { cn } from '@/lib/utils';
 
 // dnd-kit only loads on desktop (brief §10).
-const Kanban = dynamic(() => import('@/components/crm/Kanban'), { ssr: false, loading: () => <ListSkeleton rows={4} /> });
+const loadKanban = () => import('@/components/crm/Kanban');
+// Start fetching the board code as soon as this page's code runs, in parallel with the data.
+if (typeof window !== 'undefined') void loadKanban();
+const Kanban = dynamic(loadKanban, { ssr: false, loading: () => <BoardSkeleton /> });
 
 export default function PipelinePage() {
   return (
@@ -99,8 +103,8 @@ function PipelineView() {
         }
       />
 
-      {deals.isLoading ? (
-        <ListSkeleton rows={5} />
+      {deals.isLoading && desktop ? (
+        <BoardSkeleton stages={pipeline.stages} />
       ) : deals.isError ? (
         <ErrorState onRetry={() => deals.refetch()} />
       ) : desktop ? (
@@ -113,6 +117,7 @@ function PipelineView() {
           selected={params.get('stage')}
           onSelect={(id) => setParam({ stage: id })}
           onMove={canWrite ? handleMove : undefined}
+          loading={deals.isLoading}
         />
       )}
 
@@ -125,7 +130,7 @@ function PipelineView() {
 
 /** Phones: stage tabs with counts, and a "Move to [next stage]" button on each card. */
 function MobileStages({
-  stages, deals, ownerName, selected, onSelect, onMove,
+  stages, deals, ownerName, selected, onSelect, onMove, loading = false,
 }: {
   stages: Stage[];
   deals: Deal[];
@@ -133,6 +138,8 @@ function MobileStages({
   selected: string | null;
   onSelect: (id: string) => void;
   onMove?: (deal: Deal, stage: Stage) => void;
+  /** Deals still loading: tabs show, counts and cards shimmer. */
+  loading?: boolean;
 }) {
   const t = useTranslations('pipeline');
   const s = useWorkspaceSettings();
@@ -162,11 +169,22 @@ function MobileStages({
               className={cn('flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium', active ? 'border-brand bg-brand text-on-brand' : 'border-gray-300 bg-white text-gray-800')}
             >
               {st.name}
-              <span className={cn('rounded-full px-1.5 text-xs tabular-nums', active ? 'bg-white/25' : 'bg-gray-100')}>{count}</span>
+              {loading ? (
+                <span aria-hidden="true" className={cn('h-4 w-5 animate-pulse rounded-full', active ? 'bg-white/30' : 'bg-gray-200')} />
+              ) : (
+                <span className={cn('rounded-full px-1.5 text-xs tabular-nums', active ? 'bg-white/25' : 'bg-gray-100')}>{count}</span>
+              )}
             </button>
           );
         })}
       </div>
+      {loading ? (
+        <div role="status" className="space-y-2">
+          <div aria-hidden="true" className="mb-3 h-4 w-40 animate-pulse rounded bg-gray-200" />
+          <DealCardSkeletons count={4} />
+        </div>
+      ) : (
+      <>
       <p className="mb-3 text-sm text-gray-600">
         {t('stageTotal', { count: inStage.length, value: formatMoneyValue({ amount_minor: inStage.reduce((a, d) => a + (d.value?.amount_minor ?? 0), 0), currency: inStage[0]?.value?.currency ?? s.currency }, s) })}
       </p>
@@ -180,6 +198,8 @@ function MobileStages({
         </ul>
       ) : (
         <EmptyState title={t('stageEmpty')} className="py-10" />
+      )}
+      </>
       )}
     </div>
   );

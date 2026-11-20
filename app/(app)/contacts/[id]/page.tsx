@@ -8,8 +8,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   ArrowLeft, ArrowRightLeft, CalendarPlus, Columns3, Copy, GitMerge, Mail, MessageCircle, MoreVertical, NotebookPen, Pencil,
-  Phone, Plus, Settings2, Trash2, UserCheck, X,
-} from 'lucide-react';
+  Phone, Plus, Settings2, Trash2, UserCheck, X, Merge, PencilLine} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -554,7 +553,7 @@ function NoteSheet({ contactId, onClose }: { contactId: string; onClose: () => v
     <ResponsiveSheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t('noteTitle')}
+      title={t('noteTitle')} icon={NotebookPen}
       footer={
         <Button
           className="h-11 w-full"
@@ -583,7 +582,7 @@ function AssignSheet({ contact, onClose }: { contact: Contact; onClose: () => vo
   const members = useMembers();
   const assign = useAssignContact();
   return (
-    <ResponsiveSheet open onOpenChange={(o) => !o && onClose()} title={t('assignTitle')} description={contact.name}>
+    <ResponsiveSheet open onOpenChange={(o) => !o && onClose()} title={t('assignTitle')} icon={UserCheck} description={contact.name}>
       <ul className="grid gap-2">
         {[{ user_id: null as string | null, name: c('unassigned') }, ...(members.data ?? []).filter((m) => m.status === 'active')].map((m) => (
           <li key={m.user_id ?? 'none'}>
@@ -622,7 +621,7 @@ function MergeSheet({ contact, onClose }: { contact: Contact; onClose: () => voi
     <ResponsiveSheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t('mergeTitle')}
+      title={t('mergeTitle')} icon={Merge}
       footer={
         other ? (
           <Button
@@ -691,7 +690,7 @@ function EditSheet({ contact, onClose }: { contact: Contact; onClose: () => void
     <ResponsiveSheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t('editName')}
+      title={t('editName')} icon={PencilLine}
       footer={
         <Button
           className="h-11 w-full"
@@ -737,7 +736,7 @@ function DeleteSheet({ contact, onClose }: { contact: Contact; onClose: () => vo
     <ResponsiveSheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t('delete')}
+      title={t('delete')} icon={Trash2} tone={'danger'}
       description={t('deleteConfirm', { name: contact.name })}
       footer={
         <div className="flex w-full gap-2">

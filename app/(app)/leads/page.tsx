@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Download, Filter, Search, Tag, UserCheck, Columns3, X, CircleDot } from 'lucide-react';
+import { Download, Filter, Search, Tag, UserCheck, Columns3, X, CircleDot, SlidersHorizontal} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -374,7 +374,7 @@ function FilterSheet({ open, onOpenChange, filters, onApply }: { open: boolean; 
     <ResponsiveSheet
       open={open}
       onOpenChange={onOpenChange}
-      title={t('filtersTitle')}
+      title={t('filtersTitle')} icon={SlidersHorizontal}
       footer={
         <div className="flex w-full gap-2">
           <Button
@@ -546,7 +546,7 @@ function BulkBar({ rows, onDone }: { rows: Contact[]; onDone: () => void }) {
       <ResponsiveSheet
         open={action === 'assign'}
         onOpenChange={(o) => !o && setAction(null)}
-        title={t('assignTitle', { count: rows.length })}
+        title={t('assignTitle', { count: rows.length })} icon={UserCheck}
         footer={
           <Button className="h-11 w-full" disabled={busy || !assignee} onClick={() => run((r) => assignContact(r.id, assignee === 'none' ? null : assignee))}>
             {c('apply')}
@@ -572,7 +572,7 @@ function BulkBar({ rows, onDone }: { rows: Contact[]; onDone: () => void }) {
       <ResponsiveSheet
         open={action === 'status'}
         onOpenChange={(o) => !o && setAction(null)}
-        title={t('statusTitle', { count: rows.length })}
+        title={t('statusTitle', { count: rows.length })} icon={CircleDot}
         footer={
           <Button className="h-11 w-full" disabled={busy || !status} onClick={() => run((r) => updateContact(r.id, { status }))}>
             {c('apply')}
@@ -597,7 +597,7 @@ function BulkBar({ rows, onDone }: { rows: Contact[]; onDone: () => void }) {
       <ResponsiveSheet
         open={action === 'tag'}
         onOpenChange={(o) => !o && setAction(null)}
-        title={t('tagTitle', { count: rows.length })}
+        title={t('tagTitle', { count: rows.length })} icon={Tag}
         footer={
           <Button className="h-11 w-full" disabled={busy || !tag.trim()} onClick={() => run((r) => updateContact(r.id, { tags: Array.from(new Set([...r.tags, tag.trim()])) }))}>
             {c('apply')}
@@ -611,7 +611,7 @@ function BulkBar({ rows, onDone }: { rows: Contact[]; onDone: () => void }) {
       <ResponsiveSheet
         open={action === 'pipeline'}
         onOpenChange={(o) => !o && setAction(null)}
-        title={t('pipelineTitle', { count: rows.length })}
+        title={t('pipelineTitle', { count: rows.length })} icon={Columns3}
         footer={
           <Button
             className="h-11 w-full"

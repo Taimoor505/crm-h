@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Plus, Trash2, X } from 'lucide-react';
+import { GripVertical, Plus, Trash2, X, Columns3} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,7 +64,7 @@ export default function PipelinesSettingsPage() {
       <ResponsiveSheet
         open={adding}
         onOpenChange={setAdding}
-        title={t('addPipeline')}
+        title={t('addPipeline')} icon={Columns3}
         footer={
           <Button
             className="h-11 w-full"
@@ -194,7 +194,7 @@ function StagesEditor({ pipeline }: { pipeline: Pipeline }) {
         <ResponsiveSheet
           open
           onOpenChange={(o) => !o && setDeleting(null)}
-          title={t('deleteTitle', { name: deleting.name })}
+          title={t('deleteTitle', { name: deleting.name })} icon={Trash2} tone={'danger'}
           description={t('deleteBody', { count: dealCount })}
           footer={
             <Button

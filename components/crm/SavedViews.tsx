@@ -91,7 +91,7 @@ export function SavedViewsBar({ filters, onApply }: { filters: ContactFilters; o
       <ResponsiveSheet
         open={saving}
         onOpenChange={setSaving}
-        title={t('saveViewTitle')}
+        title={t('saveViewTitle')} icon={Bookmark}
         footer={
           <Button
             className="h-11 w-full"
