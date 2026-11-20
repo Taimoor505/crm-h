@@ -73,6 +73,9 @@ describe('developer logs and status endpoints', () => {
     expect(d.components.find((c: { key: string }) => c.key === 'database')).toMatchObject({ state: 'up' });
     expect(d.api.hourly).toHaveLength(24);
     expect(d.history.database).toHaveLength(30);
+    // Days before any check are "no data", not outages.
+    expect(d.history.database[0].uptime).toBeNull();
+    expect(d.history.database[29].uptime).toBe(1);
     expect(['up', 'degraded', 'down']).toContain(d.overall);
     const [{ n }] = await admin`select count(*)::int as n from public.status_checks where component = 'database'`;
     expect(n).toBeGreaterThan(0);

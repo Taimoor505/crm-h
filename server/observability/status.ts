@@ -115,7 +115,7 @@ export async function statusPayload(): Promise<StatusPayload> {
        group by h.hour order by h.hour`,
     tx<{ component: string; day: Date; uptime: number | null; avg_ms: number | null }[]>`
       select c.component, d.day,
-             (avg(case when s.state = 'up' then 1.0 when s.state = 'degraded' then 0.5 else 0 end))::float as uptime,
+             (avg(case s.state when 'up' then 1.0 when 'degraded' then 0.5 when 'down' then 0 end))::float as uptime,
              (avg(s.latency_ms))::int as avg_ms
         from generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d(day)
         cross join (values ('api'), ('database'), ('auth'), ('storage'), ('jobs')) c(component)
