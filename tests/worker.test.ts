@@ -148,6 +148,16 @@ describe('job queue', () => {
     }
   });
 
+  it('signed-out callers (anon) cannot run the privileged functions', async () => {
+    const asAnon = (q: string) => admin.begin(async (tx) => {
+      await tx.unsafe('set local role anon');
+      return tx.unsafe(q);
+    });
+    await expect(asAnon(`select public.create_notification('${t.ws}', '${t.ali}', 'x', 'spoof')`)).rejects.toThrow(/permission denied/);
+    await expect(asAnon(`select public.enqueue_job('x')`)).rejects.toThrow(/permission denied/);
+    await expect(asAnon(`select public.is_workspace_member('${t.ws}')`)).rejects.toThrow(/permission denied/);
+  });
+
   it("picks up events Taimoor's code writes to domain_events", async () => {
     await admin`delete from public.jobs`;
     const [ev] = await admin`
