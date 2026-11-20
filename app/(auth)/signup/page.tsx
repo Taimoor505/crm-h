@@ -46,10 +46,21 @@ function Signup() {
       if (r.status === 'signed_in') {
         signIn(r.session);
         router.replace(next);
-      } else setSentTo(r.email);
+      } else {
+        setSentTo(r.email);
+        setCooldown(60);
+      }
     },
   });
-  const resend = useMutation({ mutationFn: () => resendVerification(sentTo ?? ''), meta: { silent: true } });
+  const [cooldown, setCooldown] = useState(0);
+  const resend = useMutation({ mutationFn: () => resendVerification(sentTo ?? ''), meta: { silent: true }, onSettled: () => setCooldown(60) });
+
+  // Supabase allows one resend a minute: count down instead of erroring.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
 
   const errors = {
     name: submitted && !name.trim() ? t('nameRequired') : null,
@@ -66,10 +77,11 @@ function Signup() {
             <MailCheck className="size-7" aria-hidden="true" />
           </div>
           <p className="text-base text-gray-700">{t('checkInbox', { email: sentTo })}</p>
+          <p className="text-sm text-gray-600">{t('checkSpam')}</p>
           {resend.isSuccess && <FormMessage tone="ok">{t('resent')}</FormMessage>}
-          {resend.error && <FormMessage>{(resend.error as Error).message}</FormMessage>}
-          <Button variant="outline" className="h-12 w-full" disabled={resend.isPending} onClick={() => resend.mutate()}>
-            {resend.isPending ? t('sending') : t('resendLink')}
+          {resend.error && !(isApiError(resend.error) && resend.error.code === 'rate_limited') && <FormMessage>{(resend.error as Error).message}</FormMessage>}
+          <Button variant="outline" className="h-12 w-full tabular-nums" disabled={resend.isPending || cooldown > 0} onClick={() => resend.mutate()}>
+            {resend.isPending ? t('sending') : cooldown > 0 ? t('resendIn', { seconds: cooldown }) : t('resendLink')}
           </Button>
           <Link href="/login" className="flex min-h-11 items-center justify-center text-sm font-semibold text-brand-ink hover:underline">
             {t('backToSignIn')}

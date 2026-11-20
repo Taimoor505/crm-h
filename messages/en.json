@@ -159,7 +159,9 @@
     "tooMany": "Too many attempts. Wait a minute and try again.",
     "needHelp": "Need help signing in?",
     "whatsapp": "WhatsApp",
-    "demoHint": "Demo mode: sign in as sarah@example.com with password demo1234."
+    "demoHint": "Demo mode: sign in as sarah@example.com with password demo1234.",
+    "resendIn": "Send again in {seconds}s",
+    "checkSpam": "Can't find it? Check Spam, Promotions or All Mail, and search for “Confirm your signup”."
   },
   "onboarding": {
     "title": "Set up your workspace",
