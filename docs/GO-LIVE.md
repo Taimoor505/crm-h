@@ -5,18 +5,19 @@ only be entered in the Supabase and Vercel dashboards, because they hold
 secrets or account settings. After that, the demo data switches off and the
 site runs on the real backend.
 
-## 1. Vercel: add two secrets
+## 1. Connect Supabase to Vercel (one click, no copying secrets)
 
-Vercel → project **hub-to-hub-crm** → Settings → Environment Variables. Add
-each one for Production and Preview and mark it Sensitive.
+Open https://vercel.com/integrations/supabase → **Add Integration** → choose
+the **hth15** team and the **hub-to-hub-crm** project → link the existing
+Supabase project **hubtohub12-devs's Project** → approve.
 
-| Key | Where to find it in Supabase |
-|---|---|
-| `SUPABASE_DB_URL` | Project Settings → Database → Connection string → **Transaction pooler** (port 6543). Put in the database password. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API Keys → **Secret key** (`sb_secret_…`). Used for team invites and logo uploads. |
+Supabase then copies the database connection (`POSTGRES_URL`) and the keys
+(`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, …) into Vercel and keeps
+them in sync. The app reads those names directly.
 
-These are optional, for WhatsApp and Meta later: `ENCRYPTION_KEY` (32 random
-bytes, base64), `META_APP_SECRET`, `META_VERIFY_TOKEN`.
+(Manual alternative: add `SUPABASE_DB_URL`, the Transaction pooler string on
+port 6543, and `SUPABASE_SERVICE_ROLE_KEY` in Vercel → Settings → Environment
+Variables, marked Sensitive.)
 
 ## 2. Supabase Auth: allow the site's address
 
