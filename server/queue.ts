@@ -1,4 +1,4 @@
-import { jsonb, type Db } from './db';
+import { asService, jsonb, type Db } from './db';
 
 export interface EnqueueOptions {
   workspaceId?: string | null;
@@ -16,11 +16,11 @@ export async function enqueue(
   opts: EnqueueOptions = {},
 ): Promise<number | null> {
   const runAt = opts.runAt ? new Date(opts.runAt).toISOString() : null;
-  const [row] = await tx<{ id: string | null }[]>`
+  const [row] = await asService(tx, () => tx<{ id: string | null }[]>`
     select public.enqueue_job(
       ${name}, ${jsonb(tx, payload)}::jsonb, ${opts.workspaceId ?? null}::uuid,
       coalesce(${runAt}::timestamptz, now()), ${opts.dedupeKey ?? null}, ${opts.queue ?? null}
-    ) as id`;
+    ) as id`);
   return row?.id ? Number(row.id) : null;
 }
 

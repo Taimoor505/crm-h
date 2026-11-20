@@ -67,3 +67,21 @@ export async function elevate(tx: Tx): Promise<void> {
 export function jsonb(tx: Db, value: unknown) {
   return tx.json(value as postgres.JSONValue);
 }
+
+/**
+ * Runs fn as service_role inside a user transaction, then switches back.
+ * Used to call the internal SECURITY DEFINER helpers (enqueue_job,
+ * create_notification), which signed-in users can't call directly through
+ * Supabase's public REST API.
+ */
+export async function asService<T>(tx: Db, fn: () => Promise<T>): Promise<T> {
+  const [{ role }] = await tx<{ role: string }[]>`select current_user as role`;
+  if (role !== 'authenticated') return fn();
+  await tx.unsafe('set local role service_role');
+  try {
+    return await fn();
+  } finally {
+    // After an error the transaction is aborted and rolls back anyway.
+    await tx.unsafe('set local role authenticated').catch(() => undefined);
+  }
+}

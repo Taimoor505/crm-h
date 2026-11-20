@@ -279,3 +279,16 @@ describe('partner admin', () => {
     expect(m.body.effective_role).toBe('partner_admin');
   });
 });
+
+describe('internal functions', () => {
+  it('signed-in users cannot call enqueue_job or create_notification directly (REST rpc)', async () => {
+    const t = await team('Locked Co');
+    const tryAs = (sql: string) => admin.begin(async (tx) => {
+      await tx.unsafe('set local role authenticated');
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: t.ali, role: 'authenticated' })}, true)`;
+      return tx.unsafe(sql);
+    });
+    await expect(tryAs(`select public.enqueue_job('notification.deliver', '{}'::jsonb, null, now(), null, null)`)).rejects.toThrow(/permission denied/);
+    await expect(tryAs(`select public.create_notification('${t.ws}', '${t.sara}', 'lead.assigned', 'x', null, '{}'::jsonb, 'normal', null)`)).rejects.toThrow(/permission denied/);
+  });
+});

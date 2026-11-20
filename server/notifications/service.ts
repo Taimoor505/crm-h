@@ -1,4 +1,4 @@
-import { jsonb, type Db } from '../db';
+import { asService, jsonb, type Db } from '../db';
 
 export interface NewNotification {
   workspaceId: string;
@@ -17,11 +17,11 @@ export interface NewNotification {
  * Push and agent-WhatsApp channels hook in here in weeks 6-8.
  */
 export async function notify(tx: Db, n: NewNotification): Promise<string | null> {
-  const [row] = await tx<{ id: string | null }[]>`
+  const [row] = await asService(tx, () => tx<{ id: string | null }[]>`
     select public.create_notification(
       ${n.workspaceId}, ${n.userId}, ${n.type}, ${n.title}, ${n.body ?? null},
       ${jsonb(tx, n.data ?? {})}::jsonb, ${n.priority ?? 'normal'}, ${n.dedupeKey ?? null}
-    ) as id`;
+    ) as id`);
   return row?.id ?? null;
 }
 
