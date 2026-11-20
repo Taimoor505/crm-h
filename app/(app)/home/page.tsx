@@ -100,7 +100,7 @@ function Kpis({ data }: { data?: HomeSummary }) {
         <Link key={k.label} href={k.href} title={k.hint} className="lift flex min-h-[104px] flex-col justify-between rounded-2xl border bg-card p-4 shadow-card">
           <span className="flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-gray-600 lg:text-sm">{k.label}</span>
-            <span className={cn('grid size-9 shrink-0 place-items-center rounded-full', k.chip)} aria-hidden="true">
+            <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', k.chip)} aria-hidden="true">
               <k.icon className="size-4" />
             </span>
           </span>
@@ -116,6 +116,7 @@ function TaskRow({ task }: { task: Task }) {
   const name = task.contact?.name ?? task.title;
   return (
     <li className="flex items-center gap-3 px-5 py-3">
+      {task.contact_id && <Avatar name={name} seed={task.contact_id} />}
       <Link href={task.contact_id ? `/contacts/${task.contact_id}` : '/follow-ups'} className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-gray-900">{task.title}</p>
         <p className="flex items-center gap-1.5 text-xs">
@@ -186,7 +187,7 @@ function NewLeadsBlock({ data, loading }: { data?: HomeSummary; loading: boolean
       ) : data && data.leads.recent.length ? (
         <>
           {data.leads.unassigned ? (
-            <Link href="/leads?owner=none" className="press mx-5 mb-1 flex min-h-10 items-center justify-between rounded-full bg-amber-50 px-4 text-sm font-medium text-amber-950">
+            <Link href="/leads?owner=none" className="press mx-5 mb-1 flex min-h-11 items-center justify-between rounded-[10px] bg-amber-50 px-4 text-sm font-medium text-amber-950">
               {t('unassignedCount', { count: data.leads.unassigned })}
               <ChevronRight className="size-4 rtl:rotate-180" aria-hidden="true" />
             </Link>

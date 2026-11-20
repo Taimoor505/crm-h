@@ -78,7 +78,7 @@ export function adaptBrandingConfig(b: Raw = {}): Branding {
   return {
     appName: b.appName ?? 'CRM',
     tagline: b.tagline ?? '',
-    primaryColor: b.primaryColor ?? '#059669',
+    primaryColor: b.primaryColor ?? '#4F46E5',
     // TODO(branding): accentColor, supportEmail, hideModules, logoUrl, faviconUrl (brief §12.8)
     accentColor: b.accentColor ?? null,
     logoText: b.logoText ?? (b.appName ?? 'CRM').slice(0, 2).toUpperCase(),

@@ -7,18 +7,18 @@
  * values anywhere else.
  */
 :root {
-  --brand-primary: #059669;
-  --brand-primary-hover: #047857;
-  --brand-surface: #e6f5f0;
-  --brand-ink: #035f43;
+  --brand-primary: #4f46e5;
+  --brand-primary-hover: #4338ca;
+  --brand-surface: #eef0fd;
+  --brand-ink: #3730a3;
   --brand-on-primary: #ffffff;
-  --brand-accent: #059669;
+  --brand-accent: #4f46e5;
   --brand-on-accent: #ffffff;
 
   /* shadcn/ui semantic tokens, wired to brand + Tailwind gray */
-  --radius: 0.875rem;
-  /* Material 3: a light brand-tinted canvas behind white surfaces. */
-  --background: color-mix(in oklab, var(--brand-primary) 4%, var(--color-gray-50));
+  --radius: 0.75rem;
+  /* A quiet neutral canvas behind white, hairline-bordered surfaces. */
+  --background: #f7f7f8;
   --foreground: var(--color-gray-900);
   --card: #ffffff;
   --card-foreground: var(--color-gray-900);
@@ -34,7 +34,7 @@
   --accent-foreground: var(--color-gray-900);
   --destructive: var(--color-red-600);
   --destructive-foreground: #ffffff;
-  --border: color-mix(in oklab, var(--color-gray-200) 75%, white);
+  --border: #e6e6ea;
   --input: var(--color-gray-300);
   --ring: var(--brand-primary);
 }
@@ -74,16 +74,19 @@
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 2px);
+  --radius-2xl: 0.875rem;
+  --radius-3xl: 1.125rem;
 
   /* Type */
   --font-sans: var(--font-body), system-ui, sans-serif;
   --font-heading: var(--font-display), system-ui, sans-serif;
 
   /* Elevation (Material 3 levels 1-3) */
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px 1px rgb(16 24 40 / 0.04);
-  --shadow-raised: 0 2px 6px 2px rgb(16 24 40 / 0.06), 0 1px 2px rgb(16 24 40 / 0.08);
-  --shadow-float: 0 8px 24px rgb(16 24 40 / 0.16), 0 2px 6px rgb(16 24 40 / 0.08);
+  /* Hairline edge + soft depth (premium flat). */
+  --shadow-card: 0 1px 2px rgb(24 24 27 / 0.04);
+  --shadow-raised: 0 4px 12px -2px rgb(24 24 27 / 0.08), 0 2px 4px -2px rgb(24 24 27 / 0.04);
+  --shadow-float: 0 0 0 1px rgb(24 24 27 / 0.06), 0 16px 40px -8px rgb(24 24 27 / 0.18), 0 4px 10px -4px rgb(24 24 27 / 0.08);
   --shadow-sheet: 0 -8px 32px rgb(16 24 40 / 0.18);
 }
 

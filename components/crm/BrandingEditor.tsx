@@ -136,7 +136,7 @@ export function BrandingEditor({ initial, onSave, saving, showModules = true, sc
         <div className="space-y-4">
           <SettingsCard title={t('sectionIdentity')}>
             <div className="space-y-5">
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div className="grid gap-5 2xl:grid-cols-2">
                 <ImageField label={t('logo')} hint={t('logoHint')} value={b.logoUrl} onChange={(v) => set('logoUrl', v)} kind="logo" scope={scope} />
                 <ImageField label={t('favicon')} hint={t('faviconHint')} value={b.faviconUrl} onChange={(v) => set('faviconUrl', v)} kind="favicon" scope={scope} square />
               </div>

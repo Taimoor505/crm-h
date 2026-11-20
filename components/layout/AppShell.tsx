@@ -18,6 +18,7 @@ import { useSetAvailability } from '@/hooks/queries/admin';
 import { openQuickAdd } from '@/lib/ui-store';
 import { Avatar } from '@/components/crm/badges';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { NAV, isActive, moduleForPath, type NavItem } from './nav';
 import { NotificationBell } from './NotificationBell';
 import { GlobalSearch } from './GlobalSearch';
@@ -132,27 +133,15 @@ function Sidebar({ items }: { items: NavItem[] }) {
   const { branding } = useBranding();
   const { canWrite } = usePermissions();
   return (
-    <aside className="sticky top-0 hidden h-dvh w-72 shrink-0 flex-col border-e bg-card lg:flex">
-      <div className="flex h-16 items-center gap-3 px-5">
+    <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e bg-card lg:flex">
+      <div className="flex h-16 items-center gap-3 px-4">
         <BrandMark />
         <div className="min-w-0">
           <p className="truncate font-heading text-sm font-semibold">{branding.appName}</p>
           <WorkspaceSwitcher />
         </div>
       </div>
-      {canWrite && (
-        <div className="px-4 pt-2 pb-4">
-          <button
-            type="button"
-            onClick={() => openQuickAdd()}
-            className="press flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-accent text-sm font-semibold text-on-brand-accent shadow-raised transition-shadow hover:shadow-float"
-          >
-            <Plus className="size-4" aria-hidden="true" />
-            {s('addLead')}
-          </button>
-        </div>
-      )}
-      <nav aria-label={t('mainNav')} className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
+      <nav aria-label={t('mainNav')} className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         {items.map((item) => {
           const active = isActive(item, pathname);
           return (
@@ -161,11 +150,11 @@ function Sidebar({ items }: { items: NavItem[] }) {
               href={item.href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex h-12 items-center gap-3 rounded-full px-4 text-sm transition-colors',
-                active ? 'bg-brand-surface font-semibold text-brand-ink' : 'font-medium text-gray-700 hover:bg-gray-100',
+                'flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors',
+                active ? 'bg-brand-surface font-semibold text-brand-ink' : 'font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900',
               )}
             >
-              <item.icon className="size-5" aria-hidden="true" />
+              <item.icon className="size-[18px]" aria-hidden="true" />
               {t(item.key)}
             </Link>
           );
@@ -177,8 +166,10 @@ function Sidebar({ items }: { items: NavItem[] }) {
 
 function TopBar() {
   const { branding } = useBranding();
+  const s = useTranslations('shell');
+  const { canWrite } = usePermissions();
   return (
-    <header className="sticky top-0 z-30 border-b bg-card/90 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b bg-card/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-2 px-2 lg:px-8">
       <div className="flex min-w-0 flex-1 items-center gap-2 ps-2 lg:hidden">
         <BrandMark size="sm" />
@@ -193,6 +184,12 @@ function TopBar() {
       <div className="lg:hidden">
         <GlobalSearch variant="icon" />
       </div>
+      {canWrite && (
+        <Button type="button" onClick={() => openQuickAdd()} className="hidden lg:inline-flex">
+          <Plus className="size-4" aria-hidden="true" />
+          {s('addLead')}
+        </Button>
+      )}
       <NotificationBell />
       <UserMenu />
       </div>
