@@ -7,12 +7,17 @@ let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 /** Verifies a Supabase Auth access token and returns the user id (sub). */
 export async function verifyAccessToken(token: string): Promise<{ userId: string; claims: JWTPayload }> {
   try {
-    let payload: JWTPayload;
+    let payload: JWTPayload | null = null;
+    // Legacy projects sign with a shared HS256 secret; newer ones with
+    // asymmetric keys published at /.well-known/jwks.json. Accept either.
     if (env.supabaseJwtSecret) {
-      ({ payload } = await jwtVerify(token, new TextEncoder().encode(env.supabaseJwtSecret), {
-        audience: 'authenticated',
-      }));
-    } else {
+      try {
+        ({ payload } = await jwtVerify(token, new TextEncoder().encode(env.supabaseJwtSecret), { audience: 'authenticated' }));
+      } catch (err) {
+        if (!env.supabaseUrl) throw err;
+      }
+    }
+    if (!payload) {
       if (!env.supabaseUrl) throw new Error('SUPABASE_URL or SUPABASE_JWT_SECRET must be set');
       jwks ??= createRemoteJWKSet(new URL(`${env.supabaseUrl}/auth/v1/.well-known/jwks.json`));
       ({ payload } = await jwtVerify(token, jwks, { audience: 'authenticated' }));

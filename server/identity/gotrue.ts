@@ -26,6 +26,17 @@ export interface GoTrue {
   invite(email: string, name: string, redirectTo: string): Promise<{ userId: string }>;
 }
 
+/**
+ * New-style keys (sb_publishable_…, sb_secret_…) go in `apikey` only; legacy
+ * JWT keys also go in Authorization. A user's access token always does.
+ */
+export function supabaseHeaders(key: string, bearer?: string): Record<string, string> {
+  const h: Record<string, string> = { apikey: key, 'content-type': 'application/json' };
+  if (bearer) h.authorization = `Bearer ${bearer}`;
+  else if (!key.startsWith('sb_')) h.authorization = `Bearer ${key}`;
+  return h;
+}
+
 function anonKey(): string {
   return process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 }
@@ -67,11 +78,7 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; be
   try {
     res = await fetch(`${baseUrl()}/auth/v1${path}`, {
       method: init.method ?? 'POST',
-      headers: {
-        apikey: key,
-        authorization: `Bearer ${init.bearer ?? key}`,
-        'content-type': 'application/json',
-      },
+      headers: supabaseHeaders(key, init.bearer),
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       cache: 'no-store',
     });
