@@ -1,44 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { canSeeRecord, resolveActorContext } from '@/lib/taimoor/auth';
+import { z } from 'zod';
+import { decodeCursor, encodeCursor, json, readQuery, userRoute } from '@/server/http';
+import { activityOut, visibleContact, type ActivityRow } from '@/server/core/crm';
 
-export async function GET(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
-  const { state, ctx } = auth;
-  const contact = state.contacts.find(
-    (c) => c.id === id && c.workspace_id === ctx.workspace.id
-  );
-  if (!contact) {
-    return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
-  }
-  if (!canSeeRecord(ctx, contact.owner_id)) {
-    return NextResponse.json({ error: 'RLS Forbidden' }, { status: 403 });
-  }
-
-  const limit = Math.min(Math.max(Number(req.nextUrl.searchParams.get('limit') || 25), 1), 100);
-  const cursor = req.nextUrl.searchParams.get('cursor');
-
-  const items = state.activities
-    .filter((a) => a.workspace_id === ctx.workspace.id && a.contact_id === id)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
-
-  let start = 0;
-  if (cursor) {
-    const idx = items.findIndex((i) => i.id === cursor);
-    if (idx >= 0) start = idx + 1;
-  }
-  const page = items.slice(start, start + limit);
-  const nextCursor =
-    start + limit < items.length && page.length > 0 ? page[page.length - 1].id : null;
-
-  return NextResponse.json({
-    data: page,
-    pagination: { limit, next_cursor: nextCursor, total: items.length },
+// GET /contacts/:id/timeline: activities, newest first.
+export const GET = userRoute<{ id: string }>({ allowWhenReadOnly: true }, async ({ req, params, tx, workspace, userId, isManager }) => {
+  const c = await visibleContact(tx, workspace.id, params.id, userId, isManager);
+  const q = readQuery(req, z.object({ limit: z.coerce.number().int().min(1).max(100).default(25), cursor: z.string().optional() }));
+  const cur = decodeCursor<{ c: string; id: string }>(q.cursor);
+  const rows = await tx<ActivityRow[]>`
+    select * from public.activities where contact_id = ${c.id} and workspace_id = ${workspace.id}
+      ${cur ? tx`and (created_at, id) < (${cur.c}::timestamptz, ${cur.id}::uuid)` : tx``}
+     order by created_at desc, id desc limit ${q.limit + 1}`;
+  const [{ total }] = await tx<{ total: number }[]>`select count(*)::int as total from public.activities where contact_id = ${c.id}`;
+  const page = rows.slice(0, q.limit);
+  const last = page.at(-1);
+  return json({
+    data: page.map(activityOut),
+    pagination: { limit: q.limit, next_cursor: rows.length > q.limit && last ? encodeCursor({ c: last.created_at.toISOString(), id: last.id }) : null, total },
   });
-}
+});

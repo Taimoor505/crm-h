@@ -49,3 +49,6 @@ grant usage on schema auth to anon, authenticated, service_role;
 grant usage on schema public to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
 grant execute on function auth.role() to anon, authenticated, service_role;
+
+-- Supabase Auth keeps sign-up metadata here (name from the sign-up form).
+alter table auth.users add column if not exists raw_user_meta_data jsonb not null default '{}'::jsonb;

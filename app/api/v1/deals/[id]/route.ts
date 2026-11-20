@@ -1,92 +1,52 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { canSeeRecord, resolveActorContext } from '@/lib/taimoor/auth';
-import { validateCustomFields } from '@/lib/taimoor/custom-fields';
-import { saveState, writeAuditLog } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { ApiError, json, readJson, userRoute } from '@/server/http';
+import { cleanCustom, dealOut } from '@/server/core/crm';
+import { reloadDeal, visibleDeal } from '@/server/core/deals';
 
-export async function PATCH(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
+type P = { id: string };
+
+// GET /deals/:id
+export const GET = userRoute<P>({ allowWhenReadOnly: true }, async ({ params, tx, workspace, userId, isManager }) => {
+  return json({ deal: dealOut(await visibleDeal(tx, workspace.id, params.id, userId, isManager)) });
+});
+
+const patchSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  value_minor: z.number().int().min(0).max(1e15).nullable().optional(),
+  currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  expected_close: z.iso.date().nullable().optional(),
+  owner_id: z.uuid().optional(),
+  custom: z.record(z.string(), z.unknown()).optional(),
+});
+
+// PATCH /deals/:id (stage changes go through POST /deals/:id/move)
+export const PATCH = userRoute<P>({}, async ({ req, params, tx, workspace, userId, isManager }) => {
+  const d = await visibleDeal(tx, workspace.id, params.id, userId, isManager);
+  const b = await readJson(req, patchSchema);
+  if (b.owner_id && !isManager) throw new ApiError(403, 'forbidden', 'Only owners and managers can reassign deals');
+  if (b.owner_id) {
+    const [m] = await tx`select 1 from public.memberships where workspace_id = ${workspace.id} and user_id = ${b.owner_id} and status = 'active'`;
+    if (!m) throw new ApiError(422, 'not_a_member', 'That person is not an active member of this workspace');
   }
+  const custom = b.custom ? { ...d.custom, ...(await cleanCustom(tx, workspace.id, 'deal', b.custom)) } : d.custom;
+  await elevate(tx);
+  await tx`
+    update public.deals set
+      title = ${b.title ?? d.title},
+      value_minor = ${b.value_minor === undefined ? d.value_minor : b.value_minor ?? 0},
+      currency = ${b.currency ?? d.currency},
+      expected_close = ${b.expected_close === undefined ? d.expected_close : b.expected_close},
+      owner_id = ${b.owner_id ?? d.owner_id},
+      custom = ${tx.json(custom as never)}, updated_at = now()
+    where id = ${d.id}`;
+  return json({ deal: dealOut(await reloadDeal(tx, d.id)) });
+});
 
-  try {
-    const body = await req.json();
-    const { state, ctx } = auth;
-    const deal = state.deals.find(
-      (d) => d.id === id && d.workspace_id === ctx.workspace.id && !d.deleted_at
-    );
-    if (!deal) {
-      return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
-    }
-    if (!canSeeRecord(ctx, deal.owner_id)) {
-      return NextResponse.json({ error: 'RLS Forbidden' }, { status: 403 });
-    }
-
-    if (body?.title !== undefined) deal.title = String(body.title).trim();
-    if (body?.value_pkr !== undefined) deal.value_pkr = Math.max(0, Number(body.value_pkr));
-    if (body?.expected_close !== undefined) {
-      deal.expected_close = body.expected_close ? String(body.expected_close) : null;
-    }
-    if (body?.lost_reason !== undefined) {
-      deal.lost_reason = body.lost_reason ? String(body.lost_reason) : null;
-    }
-
-    if (body?.custom) {
-      const wsDefs = state.custom_field_defs.filter(
-        (d) => d.workspace_id === ctx.workspace.id
-      );
-      const check = validateCustomFields('deal', body.custom, wsDefs, { partial: true });
-      if (!check.valid) {
-        return NextResponse.json(
-          { error: 'Custom field validation failed', details: check.errors },
-          { status: 422 }
-        );
-      }
-      deal.custom = { ...deal.custom, ...check.sanitized };
-    }
-
-    deal.updated_at = new Date().toISOString();
-    saveState(state);
-    return NextResponse.json({ deal });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
-
-export async function DELETE(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
-  const { state, ctx } = auth;
-  const deal = state.deals.find(
-    (d) => d.id === id && d.workspace_id === ctx.workspace.id && !d.deleted_at
-  );
-  if (!deal) {
-    return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
-  }
-  if (!canSeeRecord(ctx, deal.owner_id)) {
-    return NextResponse.json({ error: 'RLS Forbidden' }, { status: 403 });
-  }
-
-  deal.deleted_at = new Date().toISOString();
-  writeAuditLog(state, {
-    workspace_id: ctx.workspace.id,
-    actor_id: ctx.user.id,
-    action: 'deal.soft_deleted',
-    entity_type: 'deal',
-    entity_id: deal.id,
-    meta: { restorable_days: 30 },
-  });
-  saveState(state);
-
-  return NextResponse.json({ deleted: true, soft_deleted: true, restorable_days: 30 });
-}
+// DELETE /deals/:id: soft delete.
+export const DELETE = userRoute<P>({}, async ({ params, tx, workspace, userId, isManager }) => {
+  const d = await visibleDeal(tx, workspace.id, params.id, userId, isManager);
+  await elevate(tx);
+  await tx`update public.deals set deleted_at = now(), updated_at = now() where id = ${d.id}`;
+  return json({ deleted: true });
+});

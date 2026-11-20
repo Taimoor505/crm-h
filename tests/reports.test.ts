@@ -31,7 +31,7 @@ async function lead(at: string, source: string, owner: string | null, respondMin
 async function deal(stageName: string, owner: string, opts: { created: string; entered: string; value?: number; lostReason?: string;
   history?: string[]; contact?: string }) {
   const [d] = await admin<{ id: string }[]>`
-    insert into public.deals (workspace_id, pipeline_id, stage_id, contact_id, title, value_pkr, owner_id, lost_reason, created_at, stage_entered_at)
+    insert into public.deals (workspace_id, pipeline_id, stage_id, contact_id, title, value_minor, owner_id, lost_reason, created_at, stage_entered_at)
     values (${t.ws}, ${pipeline}, ${st[stageName]}, ${opts.contact ?? (await contactFor(t.ws, owner))}, ${'Deal'}, ${opts.value ?? 0},
             ${owner}, ${opts.lostReason ?? null},
             ${new Date(`${opts.created}+05:00`)}, ${new Date(`${opts.entered}+05:00`)})
@@ -125,24 +125,24 @@ describe('reports', () => {
   it('agents: assigned, contacted, follow-ups done, overdue and deals won', async () => {
     const res = await get('agents');
     const by = Object.fromEntries(res.body.data.agents.map((a: { agent_id: string }) => [a.agent_id, a]));
-    expect(by[t.ali]).toMatchObject({ assigned: 3, contacted: 2, follow_ups_done: 2, overdue: 0, deals_won: 1, won_value_pkr: 5_000_000 });
+    expect(by[t.ali]).toMatchObject({ assigned: 3, contacted: 2, follow_ups_done: 2, overdue: 0, deals_won: 1, won_value_minor: 5_000_000 });
     expect(by[t.sara]).toMatchObject({ assigned: 3, contacted: 2, follow_ups_done: 0, overdue: 1, deals_won: 0 });
   });
 
   it('won value by month', async () => {
     const res = await get('won-value', { from: '2026-09-01' });
     expect(res.body.data).toMatchObject({
-      total_value_pkr: 14_000_000, total_deals: 2,
-      months: [{ month: '2026-09', deals: 1, value_pkr: 9_000_000 }, { month: '2026-10', deals: 1, value_pkr: 5_000_000 }],
+      total_value_minor: 14_000_000, total_deals: 2,
+      months: [{ month: '2026-09', deals: 1, value_minor: 9_000_000 }, { month: '2026-10', deals: 1, value_minor: 5_000_000 }],
     });
-    expect((await get('won-value', { agent_id: t.ali, from: '2026-09-01' })).body.data.total_value_pkr).toBe(5_000_000);
+    expect((await get('won-value', { agent_id: t.ali, from: '2026-09-01' })).body.data.total_value_minor).toBe(5_000_000);
   });
 
   it('lost reasons, with blanks as "Not specified"', async () => {
     const res = await get('lost-reasons');
     expect(res.body.data.reasons).toEqual([
-      { reason: 'Budget', deals: 1, value_pkr: 2_000_000, share_pct: 50 },
-      { reason: 'Not specified', deals: 1, value_pkr: 0, share_pct: 50 },
+      { reason: 'Budget', deals: 1, value_minor: 2_000_000, share_pct: 50 },
+      { reason: 'Not specified', deals: 1, value_minor: 0, share_pct: 50 },
     ]);
   });
 

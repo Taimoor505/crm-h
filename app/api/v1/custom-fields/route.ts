@@ -1,94 +1,44 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { requireManagerOrOwner, resolveActorContext } from '@/lib/taimoor/auth';
-import { saveState } from '@/lib/taimoor/store';
-import { CustomFieldEntity, CustomFieldType } from '@/lib/taimoor/types';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { ApiError, json, readJson, readQuery, userRoute } from '@/server/http';
 
-export async function GET(req: NextRequest) {
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
+const TYPES = ['text', 'number', 'money', 'date', 'select', 'multiselect', 'phone', 'area', 'boolean', 'email', 'url'] as const;
+
+// GET /custom-fields?entity=contact|deal
+export const GET = userRoute({ allowWhenReadOnly: true }, async ({ req, tx, workspace }) => {
+  const q = readQuery(req, z.object({ entity: z.enum(['contact', 'deal']).optional() }));
+  const rows = await tx`
+    select id, workspace_id, entity, key, label_en, type, options, required, position, hidden, created_at
+      from public.custom_field_defs
+     where workspace_id = ${workspace.id} ${q.entity ? tx`and entity = ${q.entity}` : tx``}
+     order by entity, position, created_at`;
+  return json({ data: rows });
+});
+
+// POST /custom-fields (owner/manager)
+export const POST = userRoute({ managerOnly: true }, async ({ req, tx, workspace }) => {
+  const b = await readJson(req, z.object({
+    entity: z.enum(['contact', 'deal']),
+    key: z.string().trim().regex(/^[a-z][a-z0-9_]{0,40}$/, 'Key must be lowercase letters, digits and underscores').optional(),
+    label_en: z.string().trim().min(1).max(60).optional(),
+    label: z.string().trim().min(1).max(60).optional(),
+    type: z.enum(TYPES).default('text'),
+    options: z.array(z.string().trim().min(1).max(60)).max(50).default([]),
+    required: z.boolean().default(false),
+  }).passthrough());
+  const label = b.label_en ?? b.label;
+  if (!label) throw new ApiError(422, 'validation_failed', 'Field label is required');
+  const key = b.key ?? (label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/^(\d)/, 'f_$1').slice(0, 40) || 'field');
+  if ((b.type === 'select' || b.type === 'multiselect') && b.options.length === 0) {
+    throw new ApiError(422, 'validation_failed', 'Add at least one option');
   }
-  const { state, ctx } = auth;
-  const entity = req.nextUrl.searchParams.get('entity');
-  const fields = state.custom_field_defs
-    .filter(
-      (f) =>
-        f.workspace_id === ctx.workspace.id &&
-        (!entity || f.entity === entity)
-    )
-    .sort((a, b) => a.position - b.position);
-
-  return NextResponse.json({ data: fields });
-}
-
-export async function POST(req: NextRequest) {
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
-  const roleErr = requireManagerOrOwner(auth.ctx);
-  if (roleErr) {
-    return NextResponse.json({ error: roleErr.error }, { status: roleErr.status });
-  }
-
-  try {
-    const body = await req.json();
-    const entity = body?.entity as CustomFieldEntity;
-    const key = String(body?.key || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_]/g, '_');
-    const labelEn = String(body?.label_en || '').trim();
-    const labelUr = String(body?.label_ur || labelEn).trim();
-    const type = (body?.type || 'text') as CustomFieldType;
-
-    if (!['contact', 'deal'].includes(entity) || !key || !labelEn) {
-      return NextResponse.json(
-        { error: 'entity (contact|deal), key, and label_en are required' },
-        { status: 400 }
-      );
-    }
-
-    if (!['text', 'number', 'money', 'date', 'select', 'phone'].includes(type)) {
-      return NextResponse.json({ error: 'Invalid custom field type' }, { status: 400 });
-    }
-
-    const { state, ctx } = auth;
-    const duplicate = state.custom_field_defs.find(
-      (f) => f.workspace_id === ctx.workspace.id && f.entity === entity && f.key === key
-    );
-    if (duplicate) {
-      return NextResponse.json(
-        { error: `Custom field "${key}" already exists on ${entity}` },
-        { status: 409 }
-      );
-    }
-
-    const maxPos = state.custom_field_defs
-      .filter((f) => f.workspace_id === ctx.workspace.id)
-      .reduce((max, f) => Math.max(max, f.position), 0);
-
-    const field = {
-      id: crypto.randomUUID(),
-      workspace_id: ctx.workspace.id,
-      entity,
-      key,
-      label_en: labelEn,
-      label_ur: labelUr,
-      type,
-      options: Array.isArray(body?.options) ? body.options.map(String) : [],
-      required: Boolean(body?.required),
-      position: typeof body?.position === 'number' ? body.position : maxPos + 1,
-      hidden: Boolean(body?.hidden),
-      created_at: new Date().toISOString(),
-    };
-
-    state.custom_field_defs.push(field);
-    saveState(state);
-
-    return NextResponse.json({ custom_field: field }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+  await elevate(tx);
+  const [dup] = await tx`select 1 from public.custom_field_defs where workspace_id = ${workspace.id} and entity = ${b.entity} and key = ${key}`;
+  if (dup) throw new ApiError(409, 'duplicate_key', 'A field with this name already exists');
+  const [field] = await tx`
+    insert into public.custom_field_defs (workspace_id, entity, key, label_en, type, options, required, position)
+    values (${workspace.id}, ${b.entity}, ${key}, ${label}, ${b.type}, ${tx.json(b.options)}, ${b.required},
+            (select coalesce(max(position), 0) + 1 from public.custom_field_defs where workspace_id = ${workspace.id} and entity = ${b.entity}))
+    returning id, workspace_id, entity, key, label_en, type, options, required, position, hidden, created_at`;
+  return json({ custom_field: field }, 201);
+});

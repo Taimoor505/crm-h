@@ -1,98 +1,44 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { canSeeRecord, resolveActorContext } from '@/lib/taimoor/auth';
-import { emitDomainEvent, saveState } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { ApiError, json, readJson, userRoute } from '@/server/http';
+import { dealOut } from '@/server/core/crm';
+import { logActivity } from '@/server/core/contacts';
+import { reloadDeal, visibleDeal } from '@/server/core/deals';
+import { enqueue } from '@/server/queue';
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
+// POST /deals/:id/move: { stage_id, lost_reason (required for lost stages), won_reason }
+export const POST = userRoute<{ id: string }>({}, async ({ req, params, tx, workspace, userId, isManager }) => {
+  const d = await visibleDeal(tx, workspace.id, params.id, userId, isManager);
+  const b = await readJson(req, z.object({
+    stage_id: z.uuid(),
+    lost_reason: z.string().trim().max(200).optional(),
+    won_reason: z.string().trim().max(200).optional(),
+  }));
+  const [stage] = await tx<{ id: string; name: string; kind: string }[]>`
+    select id, name, kind from public.stages where id = ${b.stage_id} and pipeline_id = ${d.pipeline_id}`;
+  if (!stage) throw new ApiError(422, 'invalid_stage', 'Stage not found in this pipeline');
+  if (stage.kind === 'lost' && !b.lost_reason) throw new ApiError(422, 'lost_reason_required', 'Pick a reason the deal was lost');
+  if (stage.id === d.stage_id) return json({ deal: dealOut(d) });
+  await elevate(tx);
+  await tx`
+    update public.deals set stage_id = ${stage.id}, stage_entered_at = now(), updated_at = now(),
+           lost_reason = ${stage.kind === 'lost' ? b.lost_reason ?? null : null},
+           won_reason = ${stage.kind === 'won' ? b.won_reason ?? null : null}
+     where id = ${d.id}`;
+  if (stage.kind !== 'open') {
+    await tx`update public.contacts set status = ${stage.kind}, updated_at = now() where id = ${d.contact_id}`;
   }
-
-  try {
-    const body = await req.json();
-    const targetStageId = String(body?.stage_id || '');
-    if (!targetStageId) {
-      return NextResponse.json({ error: 'stage_id is required' }, { status: 400 });
-    }
-
-    const { state, ctx } = auth;
-    const deal = state.deals.find(
-      (d) => d.id === id && d.workspace_id === ctx.workspace.id && !d.deleted_at
-    );
-    if (!deal) {
-      return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
-    }
-    if (!canSeeRecord(ctx, deal.owner_id)) {
-      return NextResponse.json({ error: 'RLS Forbidden' }, { status: 403 });
-    }
-
-    const targetStage = state.stages.find(
-      (s) => s.id === targetStageId && s.workspace_id === ctx.workspace.id
-    );
-    if (!targetStage) {
-      return NextResponse.json({ error: 'Target stage not found in workspace' }, { status: 404 });
-    }
-
-    const prevStage = state.stages.find((s) => s.id === deal.stage_id);
-    const now = new Date().toISOString();
-
-    deal.stage_id = targetStage.id;
-    deal.pipeline_id = targetStage.pipeline_id;
-    deal.stage_entered_at = now;
-    deal.updated_at = now;
-    if (targetStage.kind === 'lost' && body?.lost_reason) {
-      deal.lost_reason = String(body.lost_reason);
-    }
-
-    state.activities.unshift({
-      id: crypto.randomUUID(),
-      workspace_id: ctx.workspace.id,
-      contact_id: deal.contact_id,
-      deal_id: deal.id,
-      type: 'stage_change',
-      actor_id: ctx.user.id,
-      body: `Moved deal "${deal.title}" from "${prevStage?.name || 'Unknown'}" to "${targetStage.name}"`,
-      meta: {
-        from_stage_id: prevStage?.id || null,
-        to_stage_id: targetStage.id,
-        kind: targetStage.kind,
-      },
-      created_at: now,
-    });
-
-    const emittedEvents = [
-      emitDomainEvent(state, ctx.workspace.id, 'deal.stage_changed', {
-        deal_id: deal.id,
-        from_stage_id: prevStage?.id || null,
-        to_stage_id: targetStage.id,
-        stage_kind: targetStage.kind,
-      }),
-    ];
-
-    if (targetStage.kind === 'won') {
-      emittedEvents.push(
-        emitDomainEvent(state, ctx.workspace.id, 'deal.won', {
-          deal_id: deal.id,
-          value_pkr: deal.value_pkr,
-        })
-      );
-    } else if (targetStage.kind === 'lost') {
-      emittedEvents.push(
-        emitDomainEvent(state, ctx.workspace.id, 'deal.lost', {
-          deal_id: deal.id,
-          lost_reason: deal.lost_reason,
-        })
-      );
-    }
-
-    saveState(state);
-    return NextResponse.json({ deal, emitted_events: emittedEvents });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
+  const reason = stage.kind === 'lost' ? b.lost_reason : stage.kind === 'won' ? b.won_reason : null;
+  await logActivity(tx, {
+    workspaceId: workspace.id, contactId: d.contact_id, dealId: d.id, type: 'stage_change', actorId: userId,
+    body: `Moved to ${stage.name}${reason ? ` · ${reason}` : ''}`,
+    meta: { from_stage_id: d.stage_id, to_stage_id: stage.id, kind: stage.kind, reason: reason ?? null },
+  });
+  const key = `${d.id}:${stage.id}:${Date.now()}`;
+  await enqueue(tx, 'deal.stage_changed', { deal_id: d.id, workspace_id: workspace.id, from_stage_id: d.stage_id, to_stage_id: stage.id, actor_id: userId },
+    { workspaceId: workspace.id, dedupeKey: `deal.stage_changed:${key}` });
+  if (stage.kind === 'won') {
+    await enqueue(tx, 'deal.won', { deal_id: d.id, workspace_id: workspace.id, actor_id: userId }, { workspaceId: workspace.id, dedupeKey: `deal.won:${key}` });
   }
-}
+  return json({ deal: dealOut(await reloadDeal(tx, d.id)) });
+});

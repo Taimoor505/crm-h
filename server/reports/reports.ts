@@ -187,7 +187,7 @@ export async function agentsReport(c: ReportCtx) {
   const { tx, workspaceId, filters: f } = c;
   const r = await range(c);
   const rows = await tx<{ agent_id: string; agent_name: string | null; role: string; assigned: number; contacted: number;
-    follow_ups_done: number; overdue: number; deals_won: number; won_value_pkr: number }[]>`
+    follow_ups_done: number; overdue: number; deals_won: number; won_value_minor: number }[]>`
     select m.user_id as agent_id, u.name as agent_name, m.role,
       (select count(*) from public.activities a
         where a.workspace_id = ${workspaceId} and a.type = 'assignment' and a.meta ->> 'to' = m.user_id::text
@@ -205,25 +205,25 @@ export async function agentsReport(c: ReportCtx) {
         where d.workspace_id = ${workspaceId} and d.owner_id = m.user_id and s.kind = 'won' and d.deleted_at is null
           and d.stage_entered_at >= ${r.start} and d.stage_entered_at < ${r.end}
           ${f.pipeline_id ? tx`and d.pipeline_id = ${f.pipeline_id}` : tx``})::int as deals_won,
-      (select coalesce(sum(d.value_pkr), 0) from public.deals d join public.stages s on s.id = d.stage_id
+      (select coalesce(sum(d.value_minor), 0) from public.deals d join public.stages s on s.id = d.stage_id
         where d.workspace_id = ${workspaceId} and d.owner_id = m.user_id and s.kind = 'won' and d.deleted_at is null
           and d.stage_entered_at >= ${r.start} and d.stage_entered_at < ${r.end}
-          ${f.pipeline_id ? tx`and d.pipeline_id = ${f.pipeline_id}` : tx``})::float as won_value_pkr
+          ${f.pipeline_id ? tx`and d.pipeline_id = ${f.pipeline_id}` : tx``})::float as won_value_minor
     from public.memberships m
     join public.users u on u.id = m.user_id
     where m.workspace_id = ${workspaceId} and m.status = 'active'
       ${f.agent_id ? tx`and m.user_id = ${f.agent_id}` : tx``}
     order by deals_won desc, assigned desc, u.name`;
-  return { from: r.from, to: r.to, agents: rows };
+  return { from: r.from, to: r.to, currency: await workspaceCurrency(c), agents: rows };
 }
 
-/** Won deal value (PKR) by month of winning, workspace time. */
+/** Won deal value (minor units, workspace currency) by month of winning, workspace time. */
 export async function wonValueReport(c: ReportCtx) {
   const { tx, workspaceId, timezone, filters: f } = c;
   const r = await range(c);
-  const months = await tx<{ month: string; deals: number; value_pkr: number }[]>`
+  const months = await tx<{ month: string; deals: number; value_minor: number }[]>`
     select to_char(d.stage_entered_at at time zone ${timezone}, 'YYYY-MM') as month,
-           count(*)::int as deals, coalesce(sum(d.value_pkr), 0)::float as value_pkr
+           count(*)::int as deals, coalesce(sum(d.value_minor), 0)::float as value_minor
       from public.deals d
       join public.stages s on s.id = d.stage_id
       left join public.contacts ct on ct.id = d.contact_id
@@ -234,8 +234,8 @@ export async function wonValueReport(c: ReportCtx) {
        ${f.source ? tx`and ct.source = ${f.source}` : tx``}
      group by 1 order by 1`;
   return {
-    from: r.from, to: r.to, currency: 'PKR',
-    total_value_pkr: months.reduce((s, m) => s + m.value_pkr, 0),
+    from: r.from, to: r.to, currency: await workspaceCurrency(c),
+    total_value_minor: months.reduce((s, m) => s + m.value_minor, 0),
     total_deals: months.reduce((s, m) => s + m.deals, 0),
     months,
   };
@@ -245,9 +245,9 @@ export async function wonValueReport(c: ReportCtx) {
 export async function lostReasonsReport(c: ReportCtx) {
   const { tx, workspaceId, filters: f } = c;
   const r = await range(c);
-  const reasons = await tx<{ reason: string; deals: number; value_pkr: number }[]>`
+  const reasons = await tx<{ reason: string; deals: number; value_minor: number }[]>`
     select coalesce(nullif(trim(d.lost_reason), ''), 'Not specified') as reason,
-           count(*)::int as deals, coalesce(sum(d.value_pkr), 0)::float as value_pkr
+           count(*)::int as deals, coalesce(sum(d.value_minor), 0)::float as value_minor
       from public.deals d
       join public.stages s on s.id = d.stage_id
       left join public.contacts ct on ct.id = d.contact_id
@@ -260,6 +260,7 @@ export async function lostReasonsReport(c: ReportCtx) {
   const total = reasons.reduce((s, x) => s + x.deals, 0);
   return {
     from: r.from, to: r.to, total_deals: total,
+    currency: await workspaceCurrency(c),
     reasons: reasons.map((x) => ({ ...x, share_pct: pct(x.deals, total) })),
   };
 }
@@ -272,3 +273,8 @@ export const REPORTS = {
   'won-value': wonValueReport,
   'lost-reasons': lostReasonsReport,
 } as const;
+
+async function workspaceCurrency(c: ReportCtx): Promise<string> {
+  const [w] = await c.tx<{ currency: string }[]>`select currency from public.workspaces where id = ${c.workspaceId}`;
+  return w?.currency ?? 'USD';
+}

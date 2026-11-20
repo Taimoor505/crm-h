@@ -1,56 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireManagerOrOwner, resolveActorContext } from '@/lib/taimoor/auth';
-import { saveState, writeAuditLog } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { ApiError, json, readJson, userRoute } from '@/server/http';
 
-export async function PATCH(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
+const schema = z.object({
+  role: z.enum(['owner', 'manager', 'agent']).optional(),
+  status: z.enum(['active', 'suspended']).optional(),
+});
+
+// PATCH /memberships/:id (owner/manager): change role or suspend/reactivate.
+export const PATCH = userRoute<{ id: string }>({ managerOnly: true }, async ({ req, params, tx, workspace, userId }) => {
+  const b = await readJson(req, schema);
+  await elevate(tx);
+  const [m] = await tx<{ id: string; user_id: string; role: string; status: string }[]>`
+    select id, user_id, role, status from public.memberships where id = ${params.id} and workspace_id = ${workspace.id} for update`;
+  if (!m) throw new ApiError(404, 'not_found', 'Membership not found');
+  if (m.user_id === userId) throw new ApiError(409, 'cannot_change_self', 'You cannot change your own role or access');
+  if ((m.role === 'owner' || b.role === 'owner') && workspace.role !== 'owner') {
+    throw new ApiError(403, 'forbidden', 'Only owners can change an owner');
   }
-  const roleErr = requireManagerOrOwner(auth.ctx);
-  if (roleErr) {
-    return NextResponse.json({ error: roleErr.error }, { status: roleErr.status });
+  const [updated] = await tx`
+    update public.memberships set role = ${b.role ?? m.role}, status = ${b.status ?? m.status}
+     where id = ${m.id} returning *`;
+  if (m.role === 'owner' && (b.role && b.role !== 'owner' || b.status === 'suspended')) {
+    const [{ n }] = await tx<{ n: number }[]>`
+      select count(*)::int as n from public.memberships where workspace_id = ${workspace.id} and role = 'owner' and status = 'active'`;
+    if (n === 0) throw new ApiError(409, 'last_owner', 'A workspace needs at least one owner');
   }
-
-  try {
-    const body = await req.json();
-    const { state, ctx } = auth;
-    const membership = state.memberships.find(
-      (m) => m.id === id && m.workspace_id === ctx.workspace.id
-    );
-    if (!membership) {
-      return NextResponse.json({ error: 'Membership not found in workspace' }, { status: 404 });
-    }
-
-    const prevRole = membership.role;
-    const prevStatus = membership.status;
-
-    if (body?.role && ['owner', 'manager', 'agent'].includes(body.role)) {
-      membership.role = body.role;
-    }
-    if (body?.status && ['active', 'invited', 'suspended'].includes(body.status)) {
-      membership.status = body.status;
-    }
-
-    writeAuditLog(state, {
-      workspace_id: ctx.workspace.id,
-      actor_id: ctx.user.id,
-      action: 'membership.role_changed',
-      entity_type: 'membership',
-      entity_id: membership.id,
-      meta: {
-        before: { role: prevRole, status: prevStatus },
-        after: { role: membership.role, status: membership.status },
-      },
-    });
-
-    saveState(state);
-    return NextResponse.json({ membership });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+  return json({ membership: updated });
+});

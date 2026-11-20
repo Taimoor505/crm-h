@@ -1,63 +1,25 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { requireManagerOrOwner, resolveActorContext } from '@/lib/taimoor/auth';
-import { saveState } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { json, readJson, userRoute } from '@/server/http';
+import { pipelinesWithStages } from '@/server/core/pipelines';
 
-export async function GET(req: NextRequest) {
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
+// GET /pipelines: with stages in order.
+export const GET = userRoute({ allowWhenReadOnly: true }, async ({ tx, workspace }) => {
+  return json({ data: await pipelinesWithStages(tx, workspace.id) });
+});
+
+// POST /pipelines (owner/manager): a new pipeline with starter stages.
+export const POST = userRoute({ managerOnly: true }, async ({ req, tx, workspace }) => {
+  const b = await readJson(req, z.object({ name: z.string().trim().min(1, 'Pipeline name is required').max(80) }));
+  await elevate(tx);
+  const [p] = await tx<{ id: string }[]>`
+    insert into public.pipelines (workspace_id, name, position)
+    values (${workspace.id}, ${b.name}, (select coalesce(max(position), 0) + 1 from public.pipelines where workspace_id = ${workspace.id}))
+    returning id`;
+  const starter = [['New', 'open'], ['In progress', 'open'], ['Won', 'won'], ['Lost', 'lost']] as const;
+  for (const [i, [name, kind]] of starter.entries()) {
+    await tx`insert into public.stages (workspace_id, pipeline_id, name, position, kind) values (${workspace.id}, ${p.id}, ${name}, ${i + 1}, ${kind})`;
   }
-  const { state, ctx } = auth;
-
-  const pipelines = state.pipelines
-    .filter((p) => p.workspace_id === ctx.workspace.id)
-    .sort((a, b) => a.position - b.position)
-    .map((p) => ({
-      ...p,
-      stages: state.stages
-        .filter((s) => s.pipeline_id === p.id)
-        .sort((a, b) => a.position - b.position),
-    }));
-
-  return NextResponse.json({ data: pipelines });
-}
-
-export async function POST(req: NextRequest) {
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
-  const roleErr = requireManagerOrOwner(auth.ctx);
-  if (roleErr) {
-    return NextResponse.json({ error: roleErr.error }, { status: roleErr.status });
-  }
-
-  try {
-    const body = await req.json();
-    const name = String(body?.name || '').trim();
-    if (!name) {
-      return NextResponse.json({ error: 'Pipeline name is required' }, { status: 400 });
-    }
-
-    const { state, ctx } = auth;
-    const pos =
-      state.pipelines
-        .filter((p) => p.workspace_id === ctx.workspace.id)
-        .reduce((max, p) => Math.max(max, p.position), 0) + 1;
-
-    const pipeline = {
-      id: crypto.randomUUID(),
-      workspace_id: ctx.workspace.id,
-      name,
-      position: pos,
-      created_at: new Date().toISOString(),
-    };
-    state.pipelines.push(pipeline);
-    saveState(state);
-
-    return NextResponse.json({ pipeline }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+  const [pipeline] = await pipelinesWithStages(tx, workspace.id, p.id);
+  return json({ pipeline }, 201);
+});

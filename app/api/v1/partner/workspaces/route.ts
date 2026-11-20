@@ -1,77 +1,37 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { getState, saveState, USER_IDS, writeAuditLog } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { authRoute, json, readJson } from '@/server/http';
+import { partnerOf } from '@/server/core/partner';
+import { cleanBranding, createWorkspace, regionFromInput, workspaceOut, type WorkspaceRow } from '@/server/core/workspaces';
 
-function getPartnerAdminActor(req: NextRequest) {
-  const state = getState();
-  const userId = req.headers.get('x-sandbox-user-id') || USER_IDS.PARTNER_ADMIN;
-  const user = state.users.find((u) => u.id === userId);
-  if (!user || !user.partner_admin_of) {
-    return { ok: false as const, status: 403, error: 'Forbidden: Partner Admin role required' };
-  }
-  const partner = state.partners.find((p) => p.id === user.partner_admin_of);
-  if (!partner) {
-    return { ok: false as const, status: 404, error: 'Partner not found' };
-  }
-  return { ok: true as const, state, user, partner };
-}
+// GET /partner/workspaces: the partner's client workspaces.
+export const GET = authRoute(async ({ req, tx, userId }) => {
+  const partnerId = await partnerOf(tx, userId, req);
+  const rows = await tx<(WorkspaceRow & { member_count: number; billing_status: string | null })[]>`
+    select w.*, (select count(*)::int from public.memberships m where m.workspace_id = w.id and m.status = 'active') as member_count,
+           w.status as billing_status
+      from public.workspaces w where w.partner_id = ${partnerId} order by w.created_at desc`;
+  return json({ data: rows.map((w) => ({ ...workspaceOut(w), member_count: w.member_count, billing_status: w.billing_status, branding: w.branding })) });
+});
 
-export async function GET(req: NextRequest) {
-  const res = getPartnerAdminActor(req);
-  if (!res.ok) {
-    return NextResponse.json({ error: res.error }, { status: res.status });
-  }
-  const workspaces = res.state.workspaces.filter((w) => w.partner_id === res.partner.id);
-  const domains = res.state.partner_domains.filter((d) => d.partner_id === res.partner.id);
-  return NextResponse.json({
-    partner: res.partner,
-    domains,
-    workspaces,
+const schema = z.object({
+  name: z.string().trim().min(1, 'Workspace name is required').max(80),
+  template_key: z.string().max(40).default('general'),
+  region: z.record(z.string(), z.unknown()).optional(),
+  branding: z.record(z.string(), z.unknown()).optional(),
+}).passthrough();
+
+// POST /partner/workspaces: a new client workspace (the client's owner is invited afterwards).
+export const POST = authRoute(async ({ req, tx, userId }) => {
+  const partnerId = await partnerOf(tx, userId, req);
+  const b = await readJson(req, schema);
+  const ws = await createWorkspace(tx, {
+    partnerId,
+    name: b.name,
+    templateKey: b.template_key,
+    region: regionFromInput({ ...(b as Record<string, unknown>), ...(b.region ?? {}) }),
+    branding: cleanBranding(b.branding ?? {}),
+    ownerId: null,
+    seedSamples: false,
   });
-}
-
-export async function POST(req: NextRequest) {
-  const res = getPartnerAdminActor(req);
-  if (!res.ok) {
-    return NextResponse.json({ error: res.error }, { status: res.status });
-  }
-  try {
-    const body = await req.json();
-    const name = String(body?.name || '').trim();
-    const templateKey = String(body?.template_key || 'general');
-    if (!name) {
-      return NextResponse.json({ error: 'Workspace name is required' }, { status: 400 });
-    }
-    const tpl = res.state.industry_templates.find((t) => t.key === templateKey);
-    if (!tpl) {
-      return NextResponse.json({ error: 'Invalid template_key' }, { status: 400 });
-    }
-
-    const now = new Date().toISOString();
-    const ws = {
-      id: crypto.randomUUID(),
-      partner_id: res.partner.id,
-      name,
-      industry_template_id: tpl.id,
-      template_key: tpl.key,
-      branding: body?.branding || {},
-      locale: (body?.locale === 'ur' ? 'ur' : 'en') as 'en' | 'ur',
-      timezone: 'Asia/Karachi',
-      status: 'active' as const,
-      created_at: now,
-    };
-    res.state.workspaces.push(ws);
-    writeAuditLog(res.state, {
-      workspace_id: ws.id,
-      actor_id: res.user.id,
-      action: 'partner.workspace_provisioned',
-      entity_type: 'workspace',
-      entity_id: ws.id,
-      meta: { partner_id: res.partner.id },
-    });
-    saveState(res.state);
-    return NextResponse.json({ workspace: ws }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+  return json({ workspace: workspaceOut(ws) }, 201);
+});

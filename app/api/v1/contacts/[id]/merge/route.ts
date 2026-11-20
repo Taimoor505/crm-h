@@ -1,93 +1,35 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { canSeeRecord, resolveActorContext } from '@/lib/taimoor/auth';
-import { emitDomainEvent, saveState, writeAuditLog } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { ApiError, json, readJson, userRoute } from '@/server/http';
+import { contactOut, type ContactRow } from '@/server/core/crm';
+import { logActivity } from '@/server/core/contacts';
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
+// POST /contacts/:id/merge (owner/manager): folds secondary_contact_id into this contact.
+export const POST = userRoute<{ id: string }>({ managerOnly: true }, async ({ req, params, tx, workspace, userId }) => {
+  const b = await readJson(req, z.object({ secondary_contact_id: z.uuid() }));
+  if (b.secondary_contact_id === params.id) throw new ApiError(422, 'validation_failed', 'Choose a different contact to merge');
+  await elevate(tx);
+  const rows = await tx<ContactRow[]>`
+    select * from public.contacts where workspace_id = ${workspace.id} and deleted_at is null
+       and id in (${params.id}, ${b.secondary_contact_id}) for update`;
+  const primary = rows.find((r) => r.id === params.id);
+  const secondary = rows.find((r) => r.id === b.secondary_contact_id);
+  if (!primary || !secondary) throw new ApiError(404, 'not_found', 'Contact not found');
+  const tags = Array.from(new Set([...primary.tags, ...secondary.tags]));
+  await tx`update public.contacts set deleted_at = now(), updated_at = now() where id = ${secondary.id}`;
+  const [row] = await tx<ContactRow[]>`
+    update public.contacts set
+      tags = ${tags}::text[], email = coalesce(email, ${secondary.email}),
+      alt_phone = coalesce(alt_phone, ${secondary.phone_e164}),
+      custom = ${tx.json({ ...secondary.custom, ...primary.custom } as never)},
+      owner_id = coalesce(owner_id, ${secondary.owner_id}),
+      first_response_at = least(first_response_at, ${secondary.first_response_at}),
+      last_enquiry_at = greatest(last_enquiry_at, ${secondary.last_enquiry_at}),
+      updated_at = now()
+    where id = ${primary.id} returning *`;
+  for (const t of ['deals', 'tasks', 'activities', 'conversations'] as const) {
+    await tx`update ${tx('public.' + t)} set contact_id = ${primary.id} where contact_id = ${secondary.id}`;
   }
-
-  try {
-    const body = await req.json();
-    const secondaryId = String(body?.secondary_contact_id || '');
-    if (!secondaryId || secondaryId === id) {
-      return NextResponse.json(
-        { error: 'Valid secondary_contact_id distinct from primary id is required' },
-        { status: 400 }
-      );
-    }
-
-    const { state, ctx } = auth;
-    const primary = state.contacts.find(
-      (c) => c.id === id && c.workspace_id === ctx.workspace.id && !c.deleted_at
-    );
-    const secondary = state.contacts.find(
-      (c) => c.id === secondaryId && c.workspace_id === ctx.workspace.id && !c.deleted_at
-    );
-
-    if (!primary || !secondary) {
-      return NextResponse.json({ error: 'Primary or secondary contact not found' }, { status: 404 });
-    }
-    if (!canSeeRecord(ctx, primary.owner_id) || !canSeeRecord(ctx, secondary.owner_id)) {
-      return NextResponse.json({ error: 'RLS Forbidden' }, { status: 403 });
-    }
-
-    const now = new Date().toISOString();
-    primary.alt_phone = primary.alt_phone || secondary.phone_e164;
-    primary.email = primary.email || secondary.email;
-    primary.tags = Array.from(new Set([...primary.tags, ...secondary.tags]));
-    primary.custom = { ...secondary.custom, ...primary.custom };
-    primary.updated_at = now;
-    primary.last_activity_at = now;
-
-    // Reassign deals, activities, conversations
-    state.deals.forEach((d) => {
-      if (d.contact_id === secondary.id) d.contact_id = primary.id;
-    });
-    state.activities.forEach((a) => {
-      if (a.contact_id === secondary.id) a.contact_id = primary.id;
-    });
-    state.conversations.forEach((cv) => {
-      if (cv.contact_id === secondary.id) cv.contact_id = primary.id;
-    });
-
-    secondary.deleted_at = now;
-
-    state.activities.unshift({
-      id: crypto.randomUUID(),
-      workspace_id: ctx.workspace.id,
-      contact_id: primary.id,
-      deal_id: null,
-      type: 'system',
-      actor_id: ctx.user.id,
-      body: `Merged duplicate contact "${secondary.name}" (${secondary.phone_e164}) into "${primary.name}"`,
-      meta: { merged_contact_id: secondary.id },
-      created_at: now,
-    });
-
-    writeAuditLog(state, {
-      workspace_id: ctx.workspace.id,
-      actor_id: ctx.user.id,
-      action: 'contact.merged',
-      entity_type: 'contact',
-      entity_id: primary.id,
-      meta: { secondary_id: secondary.id },
-    });
-
-    const event = emitDomainEvent(state, ctx.workspace.id, 'contact.updated', {
-      contact_id: primary.id,
-      merged_from: secondary.id,
-    });
-
-    saveState(state);
-    return NextResponse.json({ contact: primary, merged_contact_id: secondary.id, emitted_event: event });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+  await logActivity(tx, { workspaceId: workspace.id, contactId: primary.id, type: 'system', actorId: userId, body: `Merged with ${secondary.name}`, meta: { kind: 'merged', merged_contact_id: secondary.id } });
+  return json({ contact: contactOut(row) });
+});

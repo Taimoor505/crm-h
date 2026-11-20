@@ -1,40 +1,42 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getState, resolveBranding } from '@/lib/taimoor/store';
-import { checkRateLimit } from '@/lib/taimoor/rate-limit';
+import { z } from 'zod';
+import { withService } from '@/server/db';
+import { errorResponse, json, readQuery } from '@/server/http';
+import { housePartner } from '@/server/core/workspaces';
 
-export async function GET(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for') || 'local';
-  const rl = checkRateLimit(`branding:${ip}`, 120, 60_000);
-  if (!rl.allowed) {
-    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+const q = z.object({ workspace_id: z.uuid().optional(), host: z.string().max(253).optional() });
+
+/**
+ * GET /branding (public): partner defaults merged with the workspace's own
+ * overrides. Used before sign-in (by host) and after (by workspace).
+ */
+export async function GET(req: Request) {
+  try {
+    const p = readQuery(req, q);
+    const out = await withService(async (tx) => {
+      const [ws] = p.workspace_id
+        ? await tx<{ id: string; name: string; template_key: string; partner_id: string; branding: Record<string, unknown> }[]>`
+            select id, name, template_key, partner_id, branding from public.workspaces where id = ${p.workspace_id}`
+        : [];
+      const host = p.host?.toLowerCase().replace(/:\d+$/, '') ?? null;
+      const [domain] = host
+        ? await tx<{ domain: string; partner_id: string }[]>`
+            select domain, partner_id from public.partner_domains where domain = ${host} and verified`
+        : [];
+      const partnerId = ws?.partner_id ?? domain?.partner_id ?? null;
+      const [partner] = partnerId
+        ? await tx<{ id: string; name: string; slug: string; is_house: boolean; default_branding: Record<string, unknown> }[]>`
+            select id, name, slug, is_house, default_branding from public.partners where id = ${partnerId}`
+        : [await housePartner(tx)];
+      return {
+        partner: { id: partner.id, name: partner.name, slug: partner.slug, is_house: partner.is_house },
+        workspace: ws ? { id: ws.id, name: ws.name, template_key: ws.template_key, locale: 'en' } : null,
+        matched_domain: domain?.domain ?? null,
+        branding: { ...(partner.default_branding ?? {}), ...(ws?.branding ?? {}) },
+      };
+    });
+    return json(out, 200, { 'cache-control': 'private, max-age=60' });
+  } catch (err) {
+    return errorResponse(err);
   }
-
-  const host =
-    req.nextUrl.searchParams.get('host') ||
-    req.headers.get('x-forwarded-host') ||
-    req.headers.get('host');
-  const workspaceId = req.nextUrl.searchParams.get('workspace_id');
-
-  const state = getState();
-  const resolved = resolveBranding(state, { host, workspaceId });
-
-  return NextResponse.json({
-    partner: {
-      id: resolved.partner.id,
-      name: resolved.partner.name,
-      slug: resolved.partner.slug,
-      is_house: resolved.partner.is_house,
-    },
-    workspace: resolved.workspace
-      ? {
-          id: resolved.workspace.id,
-          name: resolved.workspace.name,
-          name_ur: resolved.workspace.name_ur,
-          template_key: resolved.workspace.template_key,
-          locale: resolved.workspace.locale,
-        }
-      : null,
-    matched_domain: resolved.matched_domain,
-    branding: resolved.branding,
-  });
 }
+export const dynamic = 'force-dynamic';

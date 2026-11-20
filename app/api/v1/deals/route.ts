@@ -1,152 +1,77 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { canSeeRecord, resolveActorContext } from '@/lib/taimoor/auth';
-import { validateCustomFields } from '@/lib/taimoor/custom-fields';
-import { emitDomainEvent, saveState } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { ApiError, decodeCursor, encodeCursor, json, readJson, readQuery, userRoute } from '@/server/http';
+import { cleanCustom, dealOut, dealSelect, visibleContact, type DealRow } from '@/server/core/crm';
+import { logActivity } from '@/server/core/contacts';
+import { reloadDeal } from '@/server/core/deals';
+import { loadWorkspace } from '@/server/core/workspaces';
+import { enqueue } from '@/server/queue';
 
-export async function GET(req: NextRequest) {
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
+const listSchema = z.object({
+  pipeline_id: z.uuid().optional(),
+  stage_id: z.uuid().optional(),
+  contact_id: z.uuid().optional(),
+  owner: z.union([z.literal('me'), z.uuid()]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.string().optional(),
+});
 
-  const { state, ctx } = auth;
-  const sp = req.nextUrl.searchParams;
-  const pipelineId = sp.get('pipeline_id');
-  const stageId = sp.get('stage_id');
-  const cursor = sp.get('cursor');
-  const limit = Math.min(Math.max(Number(sp.get('limit') || 20), 1), 100);
-
-  let rows = state.deals.filter((d) => {
-    if (d.workspace_id !== ctx.workspace.id || d.deleted_at) return false;
-    if (!canSeeRecord(ctx, d.owner_id)) return false;
-    if (pipelineId && d.pipeline_id !== pipelineId) return false;
-    if (stageId && d.stage_id !== stageId) return false;
-    return true;
+// GET /deals: most recently updated first, with the contact and next follow-up.
+export const GET = userRoute({ allowWhenReadOnly: true }, async ({ req, tx, workspace, userId, isManager }) => {
+  const q = readQuery(req, listSchema);
+  const cur = decodeCursor<{ u: string; id: string }>(q.cursor);
+  const owner = !isManager || q.owner === 'me' ? userId : q.owner;
+  const where = tx`
+    d.workspace_id = ${workspace.id} and d.deleted_at is null
+    ${owner ? tx`and d.owner_id = ${owner}` : tx``}
+    ${q.pipeline_id ? tx`and d.pipeline_id = ${q.pipeline_id}` : tx``}
+    ${q.stage_id ? tx`and d.stage_id = ${q.stage_id}` : tx``}
+    ${q.contact_id ? tx`and d.contact_id = ${q.contact_id}` : tx``}`;
+  const [{ total }] = await tx<{ total: number }[]>`select count(*)::int as total from public.deals d where ${where}`;
+  const rows = await tx<DealRow[]>`
+    ${dealSelect(tx)}
+    where ${where} ${cur ? tx`and (d.updated_at, d.id) < (${cur.u}::timestamptz, ${cur.id}::uuid)` : tx``}
+    order by d.updated_at desc, d.id desc limit ${q.limit + 1}`;
+  const page = rows.slice(0, q.limit);
+  const last = page.at(-1);
+  return json({
+    data: page.map(dealOut),
+    pagination: { limit: q.limit, next_cursor: rows.length > q.limit && last ? encodeCursor({ u: last.updated_at.toISOString(), id: last.id }) : null, total_visible: total },
   });
+});
 
-  rows = rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  let start = 0;
-  if (cursor) {
-    const idx = rows.findIndex((d) => d.id === cursor);
-    if (idx >= 0) start = idx + 1;
-  }
-  const page = rows.slice(start, start + limit);
-  const nextCursor =
-    start + limit < rows.length && page.length > 0 ? page[page.length - 1].id : null;
+const createSchema = z.object({
+  contact_id: z.uuid(),
+  pipeline_id: z.uuid(),
+  stage_id: z.uuid().optional(),
+  title: z.string().trim().min(1, 'Deal title is required').max(200),
+  value_minor: z.number().int().min(0).max(1e15).nullable().optional(),
+  currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  owner_id: z.uuid().optional(),
+  expected_close: z.iso.date().nullable().optional(),
+  custom: z.record(z.string(), z.unknown()).optional(),
+});
 
-  return NextResponse.json({
-    data: page,
-    pagination: { limit, next_cursor: nextCursor, total_visible: rows.length },
-  });
-}
-
-export async function POST(req: NextRequest) {
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
-
-  try {
-    const body = await req.json();
-    const { state, ctx } = auth;
-
-    const title = String(body?.title || '').trim();
-    const contactId = String(body?.contact_id || '');
-    const pipelineId = String(body?.pipeline_id || '');
-    const stageId = String(body?.stage_id || '');
-
-    if (!title || !contactId) {
-      return NextResponse.json(
-        { error: 'title and contact_id are required' },
-        { status: 400 }
-      );
-    }
-
-    const contact = state.contacts.find(
-      (c) => c.id === contactId && c.workspace_id === ctx.workspace.id && !c.deleted_at
-    );
-    if (!contact) {
-      return NextResponse.json({ error: 'Contact not found in workspace' }, { status: 404 });
-    }
-
-    const pipeline =
-      state.pipelines.find(
-        (p) => p.id === pipelineId && p.workspace_id === ctx.workspace.id
-      ) || state.pipelines.find((p) => p.workspace_id === ctx.workspace.id);
-
-    if (!pipeline) {
-      return NextResponse.json({ error: 'No pipeline found in workspace' }, { status: 404 });
-    }
-
-    const stage =
-      state.stages.find((s) => s.id === stageId && s.pipeline_id === pipeline.id) ||
-      state.stages
-        .filter((s) => s.pipeline_id === pipeline.id)
-        .sort((a, b) => a.position - b.position)[0];
-
-    if (!stage) {
-      return NextResponse.json({ error: 'No stage found in pipeline' }, { status: 404 });
-    }
-
-    const wsDefs = state.custom_field_defs.filter(
-      (d) => d.workspace_id === ctx.workspace.id
-    );
-    const check = validateCustomFields('deal', body?.custom, wsDefs);
-    if (!check.valid) {
-      return NextResponse.json(
-        { error: 'Custom field validation failed', details: check.errors },
-        { status: 422 }
-      );
-    }
-
-    const now = new Date().toISOString();
-    const ownerId =
-      ctx.effectiveRole === 'agent'
-        ? ctx.user.id
-        : String(body?.owner_id || contact.owner_id || ctx.user.id);
-
-    const deal = {
-      id: crypto.randomUUID(),
-      workspace_id: ctx.workspace.id,
-      pipeline_id: pipeline.id,
-      stage_id: stage.id,
-      contact_id: contact.id,
-      title,
-      value_pkr: Math.max(0, Number(body?.value_pkr || 0)),
-      owner_id: ownerId,
-      expected_close: body?.expected_close ? String(body.expected_close) : null,
-      lost_reason: null,
-      custom: check.sanitized,
-      stage_entered_at: now,
-      created_at: now,
-      updated_at: now,
-      deleted_at: null,
-    };
-
-    state.deals.push(deal);
-    state.activities.unshift({
-      id: crypto.randomUUID(),
-      workspace_id: ctx.workspace.id,
-      contact_id: contact.id,
-      deal_id: deal.id,
-      type: 'system',
-      actor_id: ctx.user.id,
-      body: `Deal "${deal.title}" created in stage "${stage.name}" (PKR ${deal.value_pkr.toLocaleString('en-PK')})`,
-      meta: { stage_id: stage.id, value_pkr: deal.value_pkr },
-      created_at: now,
-    });
-
-    const event = emitDomainEvent(state, ctx.workspace.id, 'deal.created', {
-      deal_id: deal.id,
-      contact_id: contact.id,
-      value_pkr: deal.value_pkr,
-      stage_id: stage.id,
-    });
-
-    saveState(state);
-    return NextResponse.json({ deal, emitted_event: event }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+// POST /deals
+export const POST = userRoute({}, async ({ req, tx, workspace, userId, isManager }) => {
+  const b = await readJson(req, createSchema);
+  const contact = await visibleContact(tx, workspace.id, b.contact_id, userId, isManager);
+  const ws = await loadWorkspace(tx, workspace.id);
+  const custom = await cleanCustom(tx, workspace.id, 'deal', b.custom);
+  const [stage] = await tx<{ id: string; name: string; kind: string }[]>`
+    select s.id, s.name, s.kind from public.stages s join public.pipelines p on p.id = s.pipeline_id
+     where p.id = ${b.pipeline_id} and p.workspace_id = ${workspace.id} ${b.stage_id ? tx`and s.id = ${b.stage_id}` : tx``}
+     order by s.position limit 1`;
+  if (!stage) throw new ApiError(422, 'invalid_stage', 'Choose a stage in this pipeline');
+  const owner = isManager ? b.owner_id ?? contact.owner_id ?? userId : userId;
+  await elevate(tx);
+  const [d] = await tx<{ id: string }[]>`
+    insert into public.deals (workspace_id, pipeline_id, stage_id, contact_id, title, value_minor, currency, owner_id, expected_close, custom)
+    values (${workspace.id}, ${b.pipeline_id}, ${stage.id}, ${contact.id}, ${b.title}, ${b.value_minor ?? 0},
+            ${b.currency ?? ws.currency}, ${owner}, ${b.expected_close ?? null}, ${tx.json(custom as never)})
+    returning id`;
+  await logActivity(tx, { workspaceId: workspace.id, contactId: contact.id, dealId: d.id, type: 'system', actorId: userId, body: `Deal created: ${b.title}`, meta: { kind: 'deal_created', stage_id: stage.id } });
+  await enqueue(tx, 'deal.stage_changed', { deal_id: d.id, workspace_id: workspace.id, from_stage_id: null, to_stage_id: stage.id, actor_id: userId },
+    { workspaceId: workspace.id, dedupeKey: `deal.stage_changed:${d.id}:created` });
+  return json({ deal: dealOut(await reloadDeal(tx, d.id)) }, 201);
+});

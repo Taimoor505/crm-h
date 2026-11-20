@@ -43,7 +43,9 @@ export async function ingestLead(
   },
 ): Promise<IngestResult> {
   const { workspaceId, source, lead } = args;
-  const phone = normalizePhone(lead.phone);
+  const [ws] = await tx<{ default_phone_country: string }[]>`
+    select default_phone_country from public.workspaces where id = ${workspaceId}`;
+  const phone = normalizePhone(lead.phone, ws?.default_phone_country);
   // Contacts are keyed by phone in the core schema, so a lead needs one.
   if (lead.phone && !phone) {
     throw new ApiError(422, 'invalid_phone', `"${lead.phone}" is not a valid phone number`);

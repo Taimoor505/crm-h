@@ -26,8 +26,10 @@ export async function createUser(name: string): Promise<string> {
   const id = randomUUID();
   await admin`insert into auth.users (id, email) values (${id}, ${`${id}@test.local`})`;
   // Taimoor's users table: phone and email are required, phone unique.
+  // The auth.users trigger has already created the row; fill in the rest.
   await admin`insert into public.users (id, name, phone, email)
-              values (${id}, ${name}, ${uniquePhone()}, ${`${id}@test.local`})`;
+              values (${id}, ${name}, ${uniquePhone()}, ${`${id}@test.local`})
+              on conflict (id) do update set name = excluded.name, phone = excluded.phone`;
   return id;
 }
 
@@ -40,7 +42,8 @@ export async function createWorkspace(name = 'Test Realty', timezone = 'Asia/Kar
     housePartner = p.id;
   }
   const [ws] = await admin<{ id: string }[]>`
-    insert into public.workspaces (partner_id, name, timezone) values (${housePartner}, ${name}, ${timezone})
+    insert into public.workspaces (partner_id, name, timezone, country, currency, locale, default_phone_country)
+    values (${housePartner}, ${name}, ${timezone}, 'PK', 'PKR', 'en-PK', 'PK')
     returning id`;
   return ws.id;
 }

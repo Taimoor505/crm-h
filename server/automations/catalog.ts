@@ -41,7 +41,7 @@ function define<S extends z.ZodType>(d: AutomationDef<S>): AutomationDef {
 const skipped = (reason: string): RunResult => ({ status: 'skipped', result: { reason } });
 
 interface ContactRow { id: string; name: string | null; phone_e164: string | null; email: string | null; owner_id: string | null }
-interface DealRow { id: string; title: string; value_pkr: string | null; owner_id: string | null; contact_id: string | null; stage_id: string }
+interface DealRow { id: string; title: string; value_minor: string | null; currency: string; owner_id: string | null; contact_id: string | null; stage_id: string }
 
 async function loadContact(tx: Tx, id: string | null): Promise<ContactRow | null> {
   if (!id) return null;
@@ -53,7 +53,7 @@ async function loadContact(tx: Tx, id: string | null): Promise<ContactRow | null
 async function loadDeal(tx: Tx, id: string | null): Promise<DealRow | null> {
   if (!id) return null;
   const [d] = await tx<DealRow[]>`
-    select id, title, value_pkr, owner_id, contact_id, stage_id from public.deals where id = ${id} and deleted_at is null`;
+    select id, title, value_minor, currency, owner_id, contact_id, stage_id from public.deals where id = ${id} and deleted_at is null`;
   return d ?? null;
 }
 
@@ -251,7 +251,9 @@ const wonNotice = define({
     const deal = await loadDeal(tx, ctx.dealId);
     if (!deal) return skipped('deal not found');
     const [owner] = await tx<{ name: string | null }[]>`select name from public.users where id = ${deal.owner_id}`;
-    const value = deal.value_pkr ? ` (Rs. ${Number(deal.value_pkr).toLocaleString('en-PK')})` : '';
+    const value = deal.value_minor && Number(deal.value_minor) > 0
+      ? ` (${new Intl.NumberFormat('en', { style: 'currency', currency: deal.currency, maximumFractionDigits: 0 }).format(Number(deal.value_minor) / 100)})`
+      : '';
     const members = await tx<{ user_id: string }[]>`
       select user_id from public.memberships where workspace_id = ${ctx.workspaceId} and status = 'active'`;
     for (const m of members) {

@@ -1,41 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireManagerOrOwner, resolveActorContext } from '@/lib/taimoor/auth';
-import { saveState } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { ApiError, json, readJson, userRoute } from '@/server/http';
 
-export async function PATCH(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
-  const roleErr = requireManagerOrOwner(auth.ctx);
-  if (roleErr) {
-    return NextResponse.json({ error: roleErr.error }, { status: roleErr.status });
-  }
-
-  try {
-    const body = await req.json();
-    const { state, ctx } = auth;
-    const field = state.custom_field_defs.find(
-      (f) => f.id === id && f.workspace_id === ctx.workspace.id
-    );
-    if (!field) {
-      return NextResponse.json({ error: 'Custom field not found' }, { status: 404 });
-    }
-
-    if (body?.label_en !== undefined) field.label_en = String(body.label_en);
-    if (body?.label_ur !== undefined) field.label_ur = String(body.label_ur);
-    if (Array.isArray(body?.options)) field.options = body.options.map(String);
-    if (typeof body?.required === 'boolean') field.required = body.required;
-    if (typeof body?.position === 'number') field.position = body.position;
-    if (typeof body?.hidden === 'boolean') field.hidden = body.hidden;
-
-    saveState(state);
-    return NextResponse.json({ custom_field: field });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+// PATCH /custom-fields/:id (owner/manager): label, options, required, hidden, position.
+export const PATCH = userRoute<{ id: string }>({ managerOnly: true }, async ({ req, params, tx, workspace }) => {
+  const b = await readJson(req, z.object({
+    label_en: z.string().trim().min(1).max(60).optional(),
+    label: z.string().trim().min(1).max(60).optional(),
+    options: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
+    required: z.boolean().optional(),
+    hidden: z.boolean().optional(),
+    position: z.number().int().min(0).optional(),
+  }).passthrough());
+  await elevate(tx);
+  const [f] = await tx<{ id: string; label_en: string; options: string[]; required: boolean; hidden: boolean; position: number }[]>`
+    select * from public.custom_field_defs where id = ${params.id} and workspace_id = ${workspace.id}`;
+  if (!f) throw new ApiError(404, 'not_found', 'Field not found');
+  const [field] = await tx`
+    update public.custom_field_defs set
+      label_en = ${b.label_en ?? b.label ?? f.label_en}, options = ${tx.json(b.options ?? f.options)},
+      required = ${b.required ?? f.required}, hidden = ${b.hidden ?? f.hidden}, position = ${b.position ?? f.position}
+    where id = ${f.id}
+    returning id, workspace_id, entity, key, label_en, type, options, required, position, hidden, created_at`;
+  return json({ custom_field: field });
+});

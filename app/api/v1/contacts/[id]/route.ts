@@ -1,185 +1,69 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { canSeeRecord, resolveActorContext } from '@/lib/taimoor/auth';
-import { normalizePhoneToE164 } from '@/lib/taimoor/phone';
-import { validateCustomFields } from '@/lib/taimoor/custom-fields';
-import { emitDomainEvent, saveState, writeAuditLog } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { elevate } from '@/server/db';
+import { ApiError, json, readJson, userRoute } from '@/server/http';
+import { normalizePhone } from '@/server/core/phone';
+import { cleanCustom, contactOut, visibleContact, type ContactRow } from '@/server/core/crm';
+import { logActivity } from '@/server/core/contacts';
+import { loadWorkspace } from '@/server/core/workspaces';
 
-export async function GET(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
+type P = { id: string };
+
+// GET /contacts/:id
+export const GET = userRoute<P>({ allowWhenReadOnly: true }, async ({ params, tx, workspace, userId, isManager }) => {
+  return json({ contact: contactOut(await visibleContact(tx, workspace.id, params.id, userId, isManager)) });
+});
+
+const patchSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  phone: z.string().trim().max(30).optional(),
+  phone_country: z.string().length(2).optional(),
+  alt_phone: z.string().trim().max(30).nullable().optional(),
+  email: z.union([z.email(), z.literal(''), z.null()]).optional(),
+  status: z.string().trim().min(1).max(30).optional(),
+  source: z.string().trim().min(1).max(40).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
+  custom: z.record(z.string(), z.unknown()).optional(),
+});
+
+// PATCH /contacts/:id
+export const PATCH = userRoute<P>({}, async ({ req, params, tx, workspace, userId, isManager }) => {
+  const c = await visibleContact(tx, workspace.id, params.id, userId, isManager);
+  const b = await readJson(req, patchSchema);
+  const ws = await loadWorkspace(tx, workspace.id);
+  let phone = c.phone_e164;
+  if (b.phone) {
+    const p = normalizePhone(b.phone, b.phone_country ?? ws.default_phone_country);
+    if (!p) throw new ApiError(422, 'invalid_phone', 'Phone number is not valid');
+    phone = p;
   }
-  const { state, ctx } = auth;
-  const contact = state.contacts.find(
-    (c) => c.id === id && c.workspace_id === ctx.workspace.id && !c.deleted_at
-  );
-  if (!contact) {
-    return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+  let alt = c.alt_phone;
+  if (b.alt_phone !== undefined) {
+    alt = b.alt_phone ? normalizePhone(b.alt_phone, ws.default_phone_country) : null;
+    if (b.alt_phone && !alt) throw new ApiError(422, 'invalid_phone', 'Second phone number is not valid');
   }
-  if (!canSeeRecord(ctx, contact.owner_id)) {
-    return NextResponse.json(
-      { error: 'RLS Forbidden: Agents can only access contacts where owner_id = their user id' },
-      { status: 403 }
-    );
+  const custom = b.custom ? { ...c.custom, ...(await cleanCustom(tx, workspace.id, 'contact', b.custom)) } : c.custom;
+  if (phone !== c.phone_e164) {
+    await elevate(tx);
+    const [dup] = await tx`select id from public.contacts where workspace_id = ${workspace.id} and phone_e164 = ${phone} and deleted_at is null and id <> ${c.id}`;
+    if (dup) throw new ApiError(409, 'duplicate_phone', `A lead with ${phone} already exists`, { duplicate_contact_id: dup.id });
   }
-  return NextResponse.json({ contact });
-}
-
-export async function PATCH(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
+  const [row] = await tx<ContactRow[]>`
+    update public.contacts set
+      name = ${b.name ?? c.name}, phone_e164 = ${phone}, alt_phone = ${alt},
+      email = ${b.email === undefined ? c.email : b.email || null}, status = ${b.status ?? c.status},
+      source = ${b.source ?? c.source}, tags = ${b.tags ?? c.tags}::text[], custom = ${tx.json(custom as never)},
+      updated_at = now()
+    where id = ${c.id} returning *`;
+  if (b.status && b.status !== c.status) {
+    await logActivity(tx, { workspaceId: workspace.id, contactId: c.id, type: 'system', actorId: userId, body: `Status changed to ${b.status}`, meta: { kind: 'status_changed', from: c.status, to: b.status } });
   }
+  return json({ contact: contactOut(row) });
+});
 
-  try {
-    const body = await req.json();
-    const { state, ctx } = auth;
-    const contact = state.contacts.find(
-      (c) => c.id === id && c.workspace_id === ctx.workspace.id
-    );
-    if (!contact) {
-      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
-    }
-    if (!canSeeRecord(ctx, contact.owner_id)) {
-      return NextResponse.json({ error: 'RLS Forbidden: Not record owner' }, { status: 403 });
-    }
-
-    if (body?.restore === true && contact.deleted_at) {
-      const deletedAgeDays =
-        (Date.now() - Date.parse(contact.deleted_at)) / (1000 * 60 * 60 * 24);
-      if (deletedAgeDays > 30) {
-        return NextResponse.json(
-          { error: '30-day restore window expired for soft-deleted contact' },
-          { status: 410 }
-        );
-      }
-      contact.deleted_at = null;
-      writeAuditLog(state, {
-        workspace_id: ctx.workspace.id,
-        actor_id: ctx.user.id,
-        action: 'contact.restored',
-        entity_type: 'contact',
-        entity_id: contact.id,
-        meta: {},
-      });
-    }
-
-    if (body?.name !== undefined) contact.name = String(body.name).trim();
-    if (body?.email !== undefined) contact.email = body.email ? String(body.email) : null;
-    if (body?.status !== undefined) contact.status = String(body.status);
-    if (body?.source !== undefined) contact.source = String(body.source);
-    if (Array.isArray(body?.tags)) contact.tags = body.tags.map(String);
-
-    if (body?.phone || body?.phone_e164) {
-      const norm = normalizePhoneToE164(body.phone || body.phone_e164);
-      if (!norm.valid || !norm.e164) {
-        return NextResponse.json({ error: norm.error || 'Invalid phone' }, { status: 400 });
-      }
-      const dup = state.contacts.find(
-        (c) =>
-          c.workspace_id === ctx.workspace.id &&
-          c.phone_e164 === norm.e164 &&
-          c.id !== contact.id &&
-          !c.deleted_at
-      );
-      if (dup) {
-        return NextResponse.json(
-          { error: `Phone ${norm.e164} already belongs to another contact` },
-          { status: 409 }
-        );
-      }
-      contact.phone_e164 = norm.e164;
-    }
-
-    if (body?.custom) {
-      const wsDefs = state.custom_field_defs.filter(
-        (d) => d.workspace_id === ctx.workspace.id
-      );
-      const check = validateCustomFields('contact', body.custom, wsDefs, { partial: true });
-      if (!check.valid) {
-        return NextResponse.json(
-          { error: 'Custom field validation failed', details: check.errors },
-          { status: 422 }
-        );
-      }
-      contact.custom = { ...contact.custom, ...check.sanitized };
-    }
-
-    const now = new Date().toISOString();
-    contact.updated_at = now;
-    contact.last_activity_at = now;
-
-    state.activities.unshift({
-      id: crypto.randomUUID(),
-      workspace_id: ctx.workspace.id,
-      contact_id: contact.id,
-      deal_id: null,
-      type: 'system',
-      actor_id: ctx.user.id,
-      body: `Contact "${contact.name}" updated`,
-      meta: { fields: Object.keys(body || {}) },
-      created_at: now,
-    });
-
-    const event = emitDomainEvent(state, ctx.workspace.id, 'contact.updated', {
-      contact_id: contact.id,
-      updated_fields: Object.keys(body || {}),
-    });
-
-    saveState(state);
-    return NextResponse.json({ contact, emitted_event: event });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
-
-export async function DELETE(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
-  const { state, ctx } = auth;
-  const contact = state.contacts.find(
-    (c) => c.id === id && c.workspace_id === ctx.workspace.id && !c.deleted_at
-  );
-  if (!contact) {
-    return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
-  }
-  if (!canSeeRecord(ctx, contact.owner_id)) {
-    return NextResponse.json({ error: 'RLS Forbidden: Not record owner' }, { status: 403 });
-  }
-
-  const now = new Date().toISOString();
-  contact.deleted_at = now;
-  contact.updated_at = now;
-
-  writeAuditLog(state, {
-    workspace_id: ctx.workspace.id,
-    actor_id: ctx.user.id,
-    action: 'contact.soft_deleted',
-    entity_type: 'contact',
-    entity_id: contact.id,
-    meta: { restorable_until: new Date(Date.now() + 30 * 86400_000).toISOString() },
-  });
-
-  saveState(state);
-  return NextResponse.json({
-    deleted: true,
-    soft_deleted: true,
-    restorable_days: 30,
-    contact_id: contact.id,
-  });
-}
+// DELETE /contacts/:id: soft delete (owner/manager, or the agent who owns it).
+export const DELETE = userRoute<P>({}, async ({ params, tx, workspace, userId, isManager }) => {
+  const c = await visibleContact(tx, workspace.id, params.id, userId, isManager);
+  await tx`update public.contacts set deleted_at = now(), updated_at = now() where id = ${c.id}`;
+  await tx`update public.tasks set status = 'cancelled', updated_at = now() where contact_id = ${c.id} and status = 'open'`;
+  return json({ deleted: true });
+});

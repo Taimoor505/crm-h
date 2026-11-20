@@ -1,56 +1,14 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { canSeeRecord, resolveActorContext } from '@/lib/taimoor/auth';
-import { saveState } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { json, readJson, userRoute } from '@/server/http';
+import { activityOut, visibleContact, type ActivityRow } from '@/server/core/crm';
 
-export async function POST(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
-  const { id } = await context.params;
-  const auth = resolveActorContext(req);
-  if (!auth.ok) {
-    return NextResponse.json({ error: auth.err.error }, { status: auth.err.status });
-  }
-
-  try {
-    const body = await req.json();
-    const noteBody = String(body?.body || '').trim();
-    if (!noteBody) {
-      return NextResponse.json({ error: 'Note body is required' }, { status: 400 });
-    }
-
-    const { state, ctx } = auth;
-    const contact = state.contacts.find(
-      (c) => c.id === id && c.workspace_id === ctx.workspace.id && !c.deleted_at
-    );
-    if (!contact) {
-      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
-    }
-    if (!canSeeRecord(ctx, contact.owner_id)) {
-      return NextResponse.json({ error: 'RLS Forbidden' }, { status: 403 });
-    }
-
-    const now = new Date().toISOString();
-    const activity = {
-      id: crypto.randomUUID(),
-      workspace_id: ctx.workspace.id,
-      contact_id: contact.id,
-      deal_id: body?.deal_id ? String(body.deal_id) : null,
-      type: 'note' as const,
-      actor_id: ctx.user.id,
-      body: noteBody,
-      meta: {},
-      created_at: now,
-    };
-
-    state.activities.unshift(activity);
-    contact.last_activity_at = now;
-    contact.updated_at = now;
-    saveState(state);
-
-    return NextResponse.json({ activity }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+// POST /contacts/:id/notes
+export const POST = userRoute<{ id: string }>({}, async ({ req, params, tx, workspace, userId, isManager }) => {
+  const c = await visibleContact(tx, workspace.id, params.id, userId, isManager);
+  const b = await readJson(req, z.object({ body: z.string().trim().min(1, 'Note is empty').max(5000), deal_id: z.uuid().optional() }));
+  const [a] = await tx<ActivityRow[]>`
+    insert into public.activities (workspace_id, contact_id, deal_id, type, actor_id, body)
+    values (${workspace.id}, ${c.id}, ${b.deal_id ?? null}, 'note', ${userId}, ${b.body}) returning *`;
+  await tx`update public.contacts set last_activity_at = now() where id = ${c.id}`;
+  return json({ activity: activityOut(a) }, 201);
+});

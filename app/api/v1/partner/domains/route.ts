@@ -1,40 +1,30 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { getState, saveState, USER_IDS } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { ApiError, authRoute, json, readJson } from '@/server/http';
+import { partnerOf } from '@/server/core/partner';
 
-export async function POST(req: NextRequest) {
-  const state = getState();
-  const userId = req.headers.get('x-sandbox-user-id') || USER_IDS.PARTNER_ADMIN;
-  const user = state.users.find((u) => u.id === userId);
-  if (!user || !user.partner_admin_of) {
-    return NextResponse.json({ error: 'Forbidden: Partner Admin role required' }, { status: 403 });
-  }
-  const partner = state.partners.find((p) => p.id === user.partner_admin_of);
-  if (!partner) {
-    return NextResponse.json({ error: 'Partner not found' }, { status: 404 });
-  }
+const TARGET = process.env.PARTNER_CNAME_TARGET ?? 'cname.vercel-dns.com';
+const out = (d: { id: string; domain: string; verified: boolean; created_at: Date }) => ({
+  ...d, dns: { type: 'CNAME', name: d.domain, value: TARGET },
+});
 
-  try {
-    const body = await req.json();
-    const domain = String(body?.domain || '').trim().toLowerCase();
-    if (!domain || !domain.includes('.')) {
-      return NextResponse.json({ error: 'Valid custom domain is required' }, { status: 400 });
-    }
-    if (state.partner_domains.some((d) => d.domain.toLowerCase() === domain)) {
-      return NextResponse.json({ error: 'Domain already registered' }, { status: 409 });
-    }
+// GET /partner/domains
+export const GET = authRoute(async ({ req, tx, userId }) => {
+  const id = await partnerOf(tx, userId, req);
+  const rows = await tx<{ id: string; domain: string; verified: boolean; created_at: Date }[]>`
+    select id, domain, verified, created_at from public.partner_domains where partner_id = ${id} order by created_at`;
+  return json({ data: rows.map(out) });
+});
 
-    const record = {
-      id: crypto.randomUUID(),
-      partner_id: partner.id,
-      domain,
-      verified: true,
-      created_at: new Date().toISOString(),
-    };
-    state.partner_domains.push(record);
-    saveState(state);
-    return NextResponse.json({ partner_domain: record }, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
+// POST /partner/domains { domain }: verified later, once DNS points at us.
+export const POST = authRoute(async ({ req, tx, userId }) => {
+  const id = await partnerOf(tx, userId, req);
+  const b = await readJson(req, z.object({ domain: z.string().trim().toLowerCase().max(253) }));
+  if (!/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(b.domain)) {
+    throw new ApiError(422, 'invalid_domain', 'Enter a valid domain, for example crm.yourcompany.com');
   }
-}
+  const [taken] = await tx`select 1 from public.partner_domains where domain = ${b.domain}`;
+  if (taken) throw new ApiError(409, 'domain_taken', 'This domain is already connected');
+  const [d] = await tx<{ id: string; domain: string; verified: boolean; created_at: Date }[]>`
+    insert into public.partner_domains (partner_id, domain) values (${id}, ${b.domain}) returning id, domain, verified, created_at`;
+  return json({ partner_domain: out(d) }, 201);
+});

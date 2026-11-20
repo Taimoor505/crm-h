@@ -27,7 +27,7 @@ const patch = (key: string, body: unknown, as = t.manager) =>
 
 async function deal(title: string, stageId: string, opts: { owner?: string; contact?: string | null; value?: number; enteredDaysAgo?: number } = {}) {
   const [d] = await admin<{ id: string }[]>`
-    insert into public.deals (workspace_id, pipeline_id, stage_id, contact_id, title, value_pkr, owner_id, stage_entered_at)
+    insert into public.deals (workspace_id, pipeline_id, stage_id, contact_id, title, value_minor, owner_id, stage_entered_at)
     values (${t.ws}, ${pipeline}, ${stageId}, ${opts.contact ?? (await contactFor(t.ws, opts.owner ?? t.ali))}, ${title},
             ${opts.value ?? 0}, ${opts.owner ?? t.ali},
             now() - make_interval(days => ${opts.enteredDaysAgo ?? 0}))
@@ -188,7 +188,7 @@ describe('deal rules', () => {
     await drain();
     const ns = await admin`select user_id, title from public.notifications where type = 'deal.won' and data->>'deal_id' = ${d}`;
     expect(ns).toHaveLength(4);
-    expect(ns[0].title).toBe('Deal won by Ali: 10 marla, DHA (Rs. 25,000,000)');
+    expect(ns[0].title).toBe('Deal won by Ali: 10 marla, DHA ($250,000)');
     expect(toLeads()).toEqual([{ workspaceId: t.ws, to: '+923211000001', template: 'thank_you', language: 'en', params: ['Haris'] }]);
   });
 

@@ -1,27 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getState, saveState, USER_IDS } from '@/lib/taimoor/store';
+import { z } from 'zod';
+import { authRoute, json, readJson } from '@/server/http';
+import { partnerOf } from '@/server/core/partner';
+import { cleanBranding, mergeBranding } from '@/server/core/workspaces';
 
-export async function PATCH(req: NextRequest) {
-  const state = getState();
-  const userId = req.headers.get('x-sandbox-user-id') || USER_IDS.PARTNER_ADMIN;
-  const user = state.users.find((u) => u.id === userId);
-  if (!user || !user.partner_admin_of) {
-    return NextResponse.json({ error: 'Forbidden: Partner Admin role required' }, { status: 403 });
-  }
-  const partner = state.partners.find((p) => p.id === user.partner_admin_of);
-  if (!partner) {
-    return NextResponse.json({ error: 'Partner not found' }, { status: 404 });
-  }
+// GET /partner/branding: the partner's default branding for all its workspaces.
+export const GET = authRoute(async ({ req, tx, userId }) => {
+  const id = await partnerOf(tx, userId, req);
+  const [p] = await tx<{ default_branding: Record<string, unknown> }[]>`select default_branding from public.partners where id = ${id}`;
+  return json({ data: p?.default_branding ?? {} });
+});
 
-  try {
-    const body = await req.json();
-    partner.default_branding = {
-      ...partner.default_branding,
-      ...(body || {}),
-    };
-    saveState(state);
-    return NextResponse.json({ partner });
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
-  }
-}
+// PATCH /partner/branding { branding }: null on a key removes it.
+export const PATCH = authRoute(async ({ req, tx, userId }) => {
+  const id = await partnerOf(tx, userId, req);
+  const b = await readJson(req, z.object({ branding: z.record(z.string(), z.unknown()) }));
+  const [p] = await tx<{ default_branding: Record<string, unknown> }[]>`select default_branding from public.partners where id = ${id} for update`;
+  const next = mergeBranding(p.default_branding ?? {}, cleanBranding(b.branding));
+  const [partner] = await tx`update public.partners set default_branding = ${tx.json(next as never)} where id = ${id}
+                              returning id, name, slug, is_house, default_branding as branding`;
+  return json({ partner, data: partner.branding });
+});

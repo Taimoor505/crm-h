@@ -1,162 +1,67 @@
-import crypto from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
-import { computeWhatsappSignature, verifyWhatsappSignature } from '@/lib/taimoor/crypto';
-import { normalizePhoneToE164 } from '@/lib/taimoor/phone';
-import { emitDomainEvent, getState, saveState, USER_IDS } from '@/lib/taimoor/store';
+import { timingSafeEqual } from 'node:crypto';
+import { withService } from '@/server/db';
+import { errorResponse, json, ApiError } from '@/server/http';
+import { verifyMetaSignature } from '@/server/channels/meta';
+import { recordInbound, recordStatus } from '@/server/core/inbox';
 
-export async function GET(req: NextRequest) {
-  // Meta Webhook challenge verification
-  const mode = req.nextUrl.searchParams.get('hub.mode');
-  const challenge = req.nextUrl.searchParams.get('hub.challenge');
-  if (mode === 'subscribe' && challenge) {
-    return new NextResponse(challenge, { status: 200 });
-  }
-  return NextResponse.json({
-    ok: true,
-    signature_header: 'X-Hub-Signature-256',
-    helper_note: 'POST JSON payload signed with HMAC-SHA256 using WHATSAPP_APP_SECRET.',
-  });
+/**
+ * WhatsApp Cloud API webhook (Meta app → Webhooks → whatsapp_business_account,
+ * field "messages"). GET is the verification handshake (META_VERIFY_TOKEN);
+ * POST is signed with the app secret.
+ */
+export async function GET(req: Request) {
+  const q = new URL(req.url).searchParams;
+  const expected = process.env.META_VERIFY_TOKEN ?? '';
+  const got = q.get('hub.verify_token') ?? '';
+  const ok = q.get('hub.mode') === 'subscribe' && expected.length > 0 && got.length === expected.length
+    && timingSafeEqual(Buffer.from(got), Buffer.from(expected));
+  if (!ok) return new Response('Forbidden', { status: 403 });
+  return new Response(q.get('hub.challenge') ?? '', { status: 200, headers: { 'content-type': 'text/plain' } });
 }
 
-export async function POST(req: NextRequest) {
-  const rawBody = await req.text();
-  const sig = req.headers.get('x-hub-signature-256');
-  const allowSandboxDemo = req.headers.get('x-sandbox-autosign') === 'true';
+interface WaValue {
+  metadata?: { phone_number_id?: string };
+  contacts?: { wa_id?: string; profile?: { name?: string } }[];
+  messages?: { id: string; from: string; timestamp?: string; type: string; text?: { body?: string }; button?: { text?: string };
+    interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } }; image?: { caption?: string }; document?: { caption?: string } }[];
+  statuses?: { id: string; status: string }[];
+}
 
-  if (!allowSandboxDemo && !verifyWhatsappSignature(rawBody, sig)) {
-    return NextResponse.json(
-      {
-        error: 'Invalid or missing X-Hub-Signature-256 HMAC-SHA256 webhook signature',
-        expected_format: 'sha256=<hex-hmac>',
-      },
-      { status: 401 }
-    );
-  }
-
+export async function POST(req: Request) {
   try {
-    const body = JSON.parse(rawBody);
-    const state = getState();
-
-    const phoneNumberId = String(body?.phone_number_id || '');
-    const waAcct =
-      state.whatsapp_accounts.find((a) => a.phone_number_id === phoneNumberId) ||
-      state.whatsapp_accounts[0];
-
-    if (!waAcct) {
-      return NextResponse.json({ error: 'No matching whatsapp_accounts row' }, { status: 404 });
+    const raw = await req.text();
+    if (!verifyMetaSignature(raw, req.headers.get('x-hub-signature-256'))) {
+      throw new ApiError(401, 'bad_signature', 'Invalid X-Hub-Signature-256');
     }
-
-    const fromNorm = normalizePhoneToE164(String(body?.from || ''));
-    if (!fromNorm.valid || !fromNorm.e164) {
-      return NextResponse.json(
-        { error: fromNorm.error || 'Invalid sender phone number' },
-        { status: 400 }
-      );
+    let body: { entry?: { changes?: { field?: string; value?: WaValue }[] }[] };
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      throw new ApiError(400, 'bad_json', 'Body must be JSON');
     }
-
-    const msgBody = String(body?.body || '').trim();
-    if (!msgBody) {
-      return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
-    }
-
-    const now = new Date().toISOString();
-    const wsId = waAcct.workspace_id;
-
-    let contact = state.contacts.find(
-      (c) => c.workspace_id === wsId && c.phone_e164 === fromNorm.e164 && !c.deleted_at
-    );
-
-    if (!contact) {
-      contact = {
-        id: crypto.randomUUID(),
-        workspace_id: wsId,
-        name: body?.sender_name ? String(body.sender_name) : `WhatsApp ${fromNorm.nationalFormat}`,
-        phone_e164: fromNorm.e164,
-        alt_phone: null,
-        email: null,
-        company_id: null,
-        source: 'WhatsApp Inbound',
-        owner_id: USER_IDS.OWNER,
-        status: 'new',
-        tags: ['WhatsApp'],
-        custom: {},
-        last_activity_at: now,
-        updated_at: now,
-        created_at: now,
-        deleted_at: null,
-      };
-      state.contacts.push(contact);
-      emitDomainEvent(state, wsId, 'contact.created', {
-        contact_id: contact.id,
-        phone_e164: contact.phone_e164,
-        source: 'WhatsApp Inbound',
-      });
-    }
-
-    let conv = state.conversations.find(
-      (cv) => cv.workspace_id === wsId && cv.contact_id === contact!.id
-    );
-    if (!conv) {
-      conv = {
-        id: crypto.randomUUID(),
-        workspace_id: wsId,
-        contact_id: contact.id,
-        channel: 'whatsapp',
-        assigned_to: contact.owner_id,
-        unread_count: 0,
-        last_message_at: now,
-      };
-      state.conversations.push(conv);
-    }
-
-    const message = {
-      id: crypto.randomUUID(),
-      workspace_id: wsId,
-      conversation_id: conv.id,
-      direction: 'inbound' as const,
-      type: 'text' as const,
-      body: msgBody,
-      media_url: null,
-      wa_message_id: String(body?.wa_message_id || `wamid.in.${Date.now()}`),
-      status: 'received' as const,
-      sent_at: now,
-    };
-
-    state.messages.push(message);
-    conv.unread_count += 1;
-    conv.last_message_at = now;
-    contact.last_activity_at = now;
-    contact.updated_at = now;
-
-    state.activities.unshift({
-      id: crypto.randomUUID(),
-      workspace_id: wsId,
-      contact_id: contact.id,
-      deal_id: null,
-      type: 'whatsapp',
-      actor_id: null,
-      body: `Inbound WhatsApp: ${msgBody}`,
-      meta: { wa_message_id: message.wa_message_id },
-      created_at: now,
+    const results: string[] = [];
+    await withService(async (tx) => {
+      for (const entry of body.entry ?? []) {
+        for (const change of entry.changes ?? []) {
+          const v = change.value;
+          if (change.field !== 'messages' || !v) continue;
+          const phoneNumberId = v.metadata?.phone_number_id ?? '';
+          for (const m of v.messages ?? []) {
+            const name = v.contacts?.find((c) => c.wa_id === m.from)?.profile?.name ?? null;
+            const text = m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title
+              ?? m.image?.caption ?? m.document?.caption ?? '';
+            const r = await recordInbound(tx, {
+              phoneNumberId, from: m.from, profileName: name, waMessageId: m.id, type: m.type, text,
+              timestamp: m.timestamp ? Number(m.timestamp) : null,
+            });
+            results.push(r.status);
+          }
+          for (const s of v.statuses ?? []) await recordStatus(tx, s.id, s.status);
+        }
+      }
     });
-
-    const event = emitDomainEvent(state, wsId, 'message.received', {
-      conversation_id: conv.id,
-      contact_id: contact.id,
-      message_id: message.id,
-      from: fromNorm.e164,
-    });
-
-    saveState(state);
-    return NextResponse.json({
-      verified_signature: !allowSandboxDemo ? true : 'sandbox-autosigned',
-      computed_signature: computeWhatsappSignature(rawBody),
-      workspace_id: wsId,
-      conversation_id: conv.id,
-      message,
-      emitted_event: event,
-    });
-  } catch {
-    return NextResponse.json({ error: 'Invalid webhook JSON payload' }, { status: 400 });
+    return json({ received: true, results });
+  } catch (err) {
+    return errorResponse(err);
   }
 }
