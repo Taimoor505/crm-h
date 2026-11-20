@@ -66,3 +66,26 @@ The background worker (`npm run worker`) sends reminders, overdue alerts,
 automations and monthly billing. Vercel can't keep it running. Any always-on
 host works, for example Railway, Render or Fly.io: same repository, start
 command `npm run worker`, and the same `SUPABASE_DB_URL`.
+
+## Google Calendar sync (optional)
+
+Each user connects their own Google account in **Settings → Google Calendar**. Their follow-ups become
+30-minute events with a 10-minute reminder; rescheduling updates the event, done adds "✓", cancel removes it,
+reassign moves it to the new owner's calendar. Until the two keys below are set, the page says "not set up".
+
+1. Go to https://console.cloud.google.com → create a project (e.g. "Hub to Hub CRM").
+2. **APIs & Services → Library** → search "Google Calendar API" → **Enable**.
+3. **APIs & Services → OAuth consent screen** (Google Auth Platform → Branding/Audience):
+   - User type **External**, app name, support email.
+   - Data access / scopes: add `.../auth/calendar.events`.
+   - Audience: while in **Testing**, add every user's Gmail under **Test users** (max 100).
+     To open it to everyone, click **Publish app** (Google may ask for verification of the calendar scope).
+4. **Credentials → Create credentials → OAuth client ID** → type **Web application**.
+   - Authorised redirect URI: `https://hub-to-hub-crm.vercel.app/api/v1/integrations/google/callback`
+     (add one per custom domain, same path).
+5. In Vercel → project **hub-to-hub-crm** → Settings → Environment Variables (Production), add
+   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from that client, then redeploy.
+
+Refresh tokens are stored encrypted (AES-256-GCM). The key is `ENCRYPTION_KEY` if set, otherwise derived from
+`SUPABASE_JWT_SECRET`. Set a dedicated `ENCRYPTION_KEY` (32 random bytes, base64) before real use; changing it
+later means users reconnect Google.

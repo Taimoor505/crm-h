@@ -27,6 +27,7 @@ export const PERMISSIONS = {
   'settings.automations': ['owner', 'manager', 'partner_admin', 'super_admin'],
   'settings.import_export': ['owner', 'manager', 'partner_admin', 'super_admin'],
   'settings.notifications': ['owner', 'manager', 'agent', 'partner_admin', 'super_admin'],
+  'settings.calendar': ['owner', 'manager', 'agent', 'partner_admin', 'super_admin'],
   'settings.branding': ['owner', 'partner_admin', 'super_admin'],
   'settings.billing': ['owner'],
   'partner.area': ['partner_admin'],

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  Bell, Building2, Columns3, CreditCard, Download, ListPlus, Palette, Plug, Shuffle, Users, Zap, ChevronRight,
+  Bell, Building2, CalendarDays, Columns3, CreditCard, Download, ListPlus, Palette, Plug, Shuffle, Users, Zap, ChevronRight,
 } from 'lucide-react';
 import { usePermissions, type Permission } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
@@ -19,6 +19,7 @@ export const SECTIONS = [
   { key: 'automations', href: '/settings/automations', icon: Zap, permission: 'settings.automations' },
   { key: 'importExport', href: '/settings/import-export', icon: Download, permission: 'settings.import_export' },
   { key: 'notifications', href: '/settings/notifications', icon: Bell, permission: 'settings.notifications' },
+  { key: 'calendar', href: '/settings/calendar', icon: CalendarDays, permission: 'settings.calendar' },
   { key: 'branding', href: '/settings/branding', icon: Palette, permission: 'settings.branding' },
   { key: 'billing', href: '/settings/billing', icon: CreditCard, permission: 'settings.billing' },
 ] as const satisfies readonly { key: string; href: string; icon: unknown; permission: Permission }[];

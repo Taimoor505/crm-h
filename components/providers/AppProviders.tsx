@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
+import { BootSplash } from '@/components/layout/BootSplash';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { makeQueryClient } from '@/lib/query-client';
@@ -70,10 +71,4 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function BootSplash() {
-  return (
-    <div className="grid min-h-dvh place-items-center" aria-busy="true">
-      <div className="size-10 animate-spin rounded-full border-4 border-gray-200 border-t-brand" />
-    </div>
-  );
-}
+export { BootSplash };

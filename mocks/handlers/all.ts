@@ -823,6 +823,8 @@ export const allHandlers = [
     return json({ data: { marked_read: n } });
   })),
 
+  // TODO(mock): Google Calendar needs real Google OAuth; the demo shows "not set up".
+  http.get(`${BASE}/integrations/google`, withAuth({ allowWhenReadOnly: true }, () => json({ data: { configured: false, connected: false, email: null, connected_at: null, last_synced_at: null, last_error: null, synced_count: 0 } }))),
   http.get(`${BASE}/notification-settings`, withAuth({ allowWhenReadOnly: true }, (ctx, _r, _p, db) => json({ data: notificationSettings(db, ctx) }))),
   http.put(`${BASE}/notification-settings`, withAuth({ allowWhenReadOnly: true }, async (ctx, req, _p, db) => {
     const b = await body<{ events?: { type: string; push?: boolean; whatsapp?: boolean }[]; quiet_hours?: boolean; whatsapp_number?: string | null }>(req);

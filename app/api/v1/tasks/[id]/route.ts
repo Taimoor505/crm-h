@@ -3,6 +3,7 @@ import { ApiError, json, readJson, userRoute } from '@/server/http';
 import { notify } from '@/server/notifications/service';
 import { logActivity } from '@/server/core/contacts';
 import { TASK_TYPES, type Task } from '@/server/tasks/service';
+import { syncCalendarLater } from '@/server/integrations/calendar-hook';
 
 const patchSchema = z
   .object({
@@ -71,5 +72,6 @@ export const PATCH = userRoute<{ id: string }>({}, async ({ req, tx, workspace, 
       meta: { action: 'cancelled', task_id: updated.id, task_type: updated.type },
     });
   }
+  syncCalendarLater(req, [updated.id]);
   return json({ data: updated });
 });

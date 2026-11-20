@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 
 /**
  * AES-256-GCM for secrets we must be able to read back (Meta page tokens).
@@ -8,7 +8,13 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
  */
 function key(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;
-  if (!raw) throw new Error('ENCRYPTION_KEY is not set');
+  if (!raw) {
+    // No dedicated key: derive one from the Supabase JWT secret (set by the
+    // Supabase-Vercel integration). Set ENCRYPTION_KEY to decouple them.
+    const seed = process.env.SUPABASE_JWT_SECRET;
+    if (!seed) throw new Error('ENCRYPTION_KEY (or SUPABASE_JWT_SECRET) is not set');
+    return Buffer.from(hkdfSync('sha256', seed, 'crm-encryption', 'crm-encryption-v1', 32));
+  }
   const k = Buffer.from(raw, 'base64');
   if (k.length !== 32) throw new Error('ENCRYPTION_KEY must be 32 bytes, base64-encoded');
   return k;

@@ -34,6 +34,8 @@ export const qk = {
 
   notifications: (ws: string) => [ws, 'notifications'] as const,
   notificationSettings: (ws: string) => [ws, 'notification-settings'] as const,
+  /** Per user, not per workspace. */
+  googleCalendar: () => ['google-calendar'] as const,
 
   conversations: (ws: string) => [ws, 'conversations'] as const,
   messages: (ws: string, id: string) => [ws, 'messages', id] as const,

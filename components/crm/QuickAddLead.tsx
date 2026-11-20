@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ChevronDown, Mic, Square, Trash2, TriangleAlert } from 'lucide-react';
+import { ChevronDown, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,47 +20,6 @@ import { ResponsiveSheet } from './ResponsiveSheet';
 import { PhoneInput, toPhoneValue, type PhoneValue } from './PhoneInput';
 
 const BASE_SOURCES = ['manual', 'walk_in', 'phone', 'referral', 'whatsapp', 'website'];
-
-function useVoiceRecorder() {
-  const [supported, setSupported] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [seconds, setSeconds] = useState(0);
-  const [blob, setBlob] = useState<Blob | null>(null);
-  const rec = useRef<MediaRecorder | null>(null);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    setSupported(typeof window !== 'undefined' && 'MediaRecorder' in window && !!navigator.mediaDevices?.getUserMedia);
-    return () => {
-      if (timer.current) clearInterval(timer.current);
-      rec.current?.stream.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-
-  async function start() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const chunks: Blob[] = [];
-    const r = new MediaRecorder(stream);
-    r.ondataavailable = (e) => chunks.push(e.data);
-    r.onstop = () => {
-      setBlob(new Blob(chunks, { type: r.mimeType || 'audio/webm' }));
-      stream.getTracks().forEach((t) => t.stop());
-    };
-    r.start();
-    rec.current = r;
-    setSeconds(0);
-    setRecording(true);
-    timer.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-  }
-
-  function stop() {
-    rec.current?.stop();
-    setRecording(false);
-    if (timer.current) clearInterval(timer.current);
-  }
-
-  return { supported, recording, seconds, blob, start, stop, clear: () => setBlob(null) };
-}
 
 /** The global "+ Add lead" sheet. Only name and phone are required. */
 export default function QuickAddLead({ prefill }: { prefill: { phone?: string; name?: string } | null }) {
@@ -84,7 +43,6 @@ export default function QuickAddLead({ prefill }: { prefill: { phone?: string; n
   const [tags, setTags] = useState('');
   const [note, setNote] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const voice = useVoiceRecorder();
 
   const dup = useDuplicateCheck(checkPhone, phone.country);
   const quickAdd = useQuickAdd();
@@ -108,7 +66,6 @@ export default function QuickAddLead({ prefill }: { prefill: { phone?: string; n
       source_label: source,
       assign_to: canAssign ? owner : 'me',
       tags: tags.split(',').map((x) => x.trim()).filter(Boolean),
-      voice: voice.blob,
     });
     countUsefulAction();
     closeQuickAdd();
@@ -241,31 +198,10 @@ export default function QuickAddLead({ prefill }: { prefill: { phone?: string; n
         )}
 
         <div className="flex items-center gap-2 pt-1">
-          {voice.supported && (
-            <>
-              {voice.blob && !voice.recording ? (
-                <Button type="button" variant="outline" className="h-11" onClick={voice.clear} aria-label={t('voiceRemove')}>
-                  <Trash2 className="size-4" aria-hidden="true" />
-                  <span className="text-xs">{t('voiceRecorded', { seconds: voice.seconds })}</span>
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11"
-                  aria-label={voice.recording ? t('voiceStop') : t('voice')}
-                  onClick={() => (voice.recording ? voice.stop() : voice.start().catch(() => {}))}
-                >
-                  {voice.recording ? <Square className="size-4 fill-red-600 text-red-600" aria-hidden="true" /> : <Mic className="size-4" aria-hidden="true" />}
-                  {voice.recording && <span className="text-xs tabular-nums">{t('recording', { seconds: voice.seconds })}</span>}
-                </Button>
-              )}
-            </>
-          )}
           <Button type="button" variant="ghost" className="ms-auto h-11" onClick={closeQuickAdd}>
             {c('cancel')}
           </Button>
-          <Button type="submit" className="h-11 min-w-28" disabled={quickAdd.isPending || voice.recording}>
+          <Button type="submit" className="h-11 min-w-28" disabled={quickAdd.isPending}>
             {quickAdd.isPending ? t('submitting') : t('submit')}
           </Button>
         </div>

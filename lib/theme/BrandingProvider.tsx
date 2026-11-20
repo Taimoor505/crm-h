@@ -8,6 +8,7 @@ import type { Branding } from '@/lib/api/types';
 import { qk } from '@/hooks/queries/keys';
 import { applyPalette, generatePalette, sidebarPalette } from './palette';
 import { applyFont } from './fonts';
+import { saveBrandCache } from './brand-cache';
 
 interface BrandingValue {
   branding: Branding;
@@ -65,6 +66,7 @@ export function BrandingProvider({
     applyPalette(palette);
     for (const [k, v] of Object.entries(sidebarPalette(branding.sidebarColor))) document.documentElement.style.setProperty(k, v);
     applyFont(branding.font);
+    if (!q.isLoading) saveBrandCache({ appName: branding.appName, logoText: branding.logoText, logoUrl: branding.logoUrl, palette: { ...palette } });
     document.title = branding.appName;
     let link = document.querySelector<HTMLLinkElement>('link[rel="icon"][data-brand]');
     if (!link) {
@@ -76,7 +78,7 @@ export function BrandingProvider({
     link.href = branding.faviconUrl || initialsFavicon(branding.logoText, palette['--brand-primary'], palette['--brand-on-primary']);
     const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (meta) meta.content = palette['--brand-primary'];
-  }, [branding]);
+  }, [branding, q.isLoading]);
 
   const value = useMemo<BrandingValue>(
     () => ({ branding, partner: q.data?.partner ?? null, loading: q.isLoading }),

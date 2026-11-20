@@ -4,6 +4,7 @@ import {
 } from '@/server/http';
 import { createTask, TASK_TYPES, type Task } from '@/server/tasks/service';
 import { dueCondition, taskSelect } from '@/server/tasks/queries';
+import { syncCalendarLater } from '@/server/integrations/calendar-hook';
 
 const listSchema = z.object({
   /** 'me', a user id, or 'all' (managers). Agents always get their own. */
@@ -78,5 +79,6 @@ export const POST = userRoute({}, async ({ req, tx, workspace, userId, isManager
     notes: body.notes,
     dueAt: body.due_at,
   });
+  syncCalendarLater(req, [task.id]);
   return json({ data: task }, 201);
 });

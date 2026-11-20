@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ApiError, json, readJson, userRoute } from '@/server/http';
 import { completeTask, followUpSchema, type Task } from '@/server/tasks/service';
+import { syncCalendarLater } from '@/server/integrations/calendar-hook';
 
 const schema = z.object({
   /** Free text or a short code, e.g. "interested", "no_answer", "visit_booked". */
@@ -29,5 +30,6 @@ export const POST = userRoute<{ id: string }>({}, async ({ req, tx, workspace, u
     note: body.note,
     next: body.next ?? null,
   });
+  syncCalendarLater(req, [result.task.id, result.next?.id]);
   return json({ data: result });
 });

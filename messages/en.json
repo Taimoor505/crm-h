@@ -792,6 +792,7 @@
       "automations": "Automations",
       "importExport": "Import and export",
       "notifications": "Notifications",
+      "calendar": "Google Calendar",
       "branding": "Branding",
       "billing": "Billing"
     },
@@ -805,6 +806,7 @@
       "automations": "Follow-ups and messages that run themselves",
       "importExport": "Bring leads in from a spreadsheet",
       "notifications": "How and when we alert you",
+      "calendar": "Put your follow-ups in your calendar",
       "branding": "Logo, colors and app name",
       "billing": "Plan, invoices and payments"
     },
@@ -1034,6 +1036,31 @@
       "sidebarBrand": "Brand colour",
       "sidebarLight": "Light",
       "sidebarCustom": "Custom colour"
+    },
+    "calendar": {
+      "intro": "Every follow-up assigned to you appears in your Google Calendar with a reminder 10 minutes before. Changes in the CRM update the event.",
+      "how1": "New follow-ups become 30-minute events with a link back to the lead",
+      "how2": "Rescheduling or renaming a follow-up updates the event",
+      "how3": "Done follow-ups get a ✓, cancelled ones are removed",
+      "how4": "Reassigned follow-ups move to the new owner's calendar",
+      "connect": "Connect Google Calendar",
+      "connecting": "Opening Google…",
+      "disconnect": "Disconnect",
+      "disconnectConfirm": "Stop syncing follow-ups to Google Calendar? Events already created stay in your calendar.",
+      "connectedAs": "Connected as {email}",
+      "connectedNoEmail": "Connected",
+      "syncedCount": "{count, plural, =0 {No follow-ups synced yet} one {# follow-up in your calendar} other {# follow-ups in your calendar}}",
+      "lastSynced": "Last synced {time}",
+      "lastError": "The last sync failed. Disconnect and connect again if this continues.",
+      "notConfigured": "Google Calendar isn't set up on this server yet. Ask your administrator to add the Google sign-in keys.",
+      "privacy": "We only add, change and remove the events we create. We never read your other events.",
+      "flash": {
+        "connected": "Google Calendar connected. Your upcoming follow-ups are being added.",
+        "denied": "You cancelled the Google sign-in.",
+        "no_refresh": "Google didn't give offline access. Remove the CRM from your Google account's third-party access and try again.",
+        "error": "We couldn't connect Google Calendar. Try again."
+      },
+      "disconnected": "Google Calendar disconnected"
     }
   },
   "modules": {
