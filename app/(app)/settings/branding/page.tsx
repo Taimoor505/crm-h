@@ -17,10 +17,16 @@ export default function BrandingSettingsPage() {
   return (
     <SettingsPage title={n('nav.branding')}>
       <BrandingEditor
-        key={branding.appName + branding.primaryColor}
+        key={JSON.stringify(branding)}
         initial={branding}
         saving={save.isPending}
-        onSave={(b) => save.mutate({ branding: b }, { onSuccess: () => toast.success(n('saved')) })}
+        onSave={(b) => {
+          // Send only what changed, so everything else keeps following the partner's brand.
+          const changed = Object.fromEntries(
+            Object.entries(b).filter(([k, v]) => JSON.stringify(v ?? null) !== JSON.stringify(branding[k as keyof typeof branding] ?? null)),
+          );
+          save.mutate({ branding: changed }, { onSuccess: () => toast.success(n('saved')) });
+        }}
       />
     </SettingsPage>
   );

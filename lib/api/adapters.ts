@@ -86,6 +86,7 @@ export function adaptBrandingConfig(b: Raw = {}): Branding {
     faviconUrl: b.faviconUrl ?? null,
     supportWhatsapp: b.supportWhatsapp ?? null,
     supportEmail: b.supportEmail ?? null,
+    font: typeof b.font === 'string' ? b.font : null,
     hideModules: Array.isArray(b.hideModules) ? b.hideModules.filter((m: string) => MODULES.includes(m as ModuleKey)) : [],
   };
 }

@@ -111,36 +111,54 @@ function withAuth(
 
 export const allHandlers = [
   // ---------- auth
-  http.post(`${BASE}/auth/otp/send`, async ({ request }) => {
-    await latency();
-    const b = await body<{ phone?: string }>(request);
-    const e164 = normalizePhone(b.phone);
-    if (!e164) return json({ error: 'Invalid phone number' }, { status: 400 });
-    getDb().otp[e164] = '482910';
-    persist();
-    return json({ sent: true, phone_e164: e164, expires_in_seconds: 300, sandbox_code: '482910' });
-  }),
-
-  http.post(`${BASE}/auth/otp/verify`, async ({ request }) => {
+  // Demo mode: any seeded user's email signs in with password "demo1234".
+  http.post(`${BASE}/auth/login`, async ({ request }) => {
     await latency();
     const db = getDb();
-    const b = await body<{ phone?: string; code?: string }>(request);
-    const e164 = normalizePhone(b.phone);
-    if (!e164 || !b.code) return json({ error: 'Valid phone and 6-digit OTP code are required' }, { status: 400 });
-    if (b.code !== '482910') return json({ error: 'Invalid or expired OTP code' }, { status: 401 });
-    let user = db.users.find((u) => u.phone === e164);
-    if (!user) {
-      user = { id: uid(), name: '', phone: e164, email: null, partner_admin_of: null, is_super_admin: false, created_at: nowIso() };
-      db.users.push(user);
-    }
-    persist();
-    return json({
-      access_token: `mock.${user.id}`,
-      token_type: 'Bearer',
-      user,
-      memberships: db.memberships.filter((m) => m.user_id === user!.id && m.status === 'active'),
-    });
+    const b = await body<{ email?: string; password?: string }>(request);
+    const user = db.users.find((u) => u.email && u.email.toLowerCase() === String(b.email ?? '').trim().toLowerCase());
+    if (!user || b.password !== 'demo1234') return fail(401, 'invalid_credentials', 'Email or password is incorrect');
+    return json(mockSession(db, user));
   }),
+
+  http.post(`${BASE}/auth/signup`, async ({ request }) => {
+    await latency();
+    const db = getDb();
+    const b = await body<{ email?: string; password?: string; name?: string }>(request);
+    const email = String(b.email ?? '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(422, 'validation_failed', 'Enter a valid email address');
+    if (String(b.password ?? '').length < 8) return fail(422, 'validation_failed', 'Use at least 8 characters');
+    let user = db.users.find((u) => u.email === email);
+    if (user) return fail(409, 'email_taken', 'An account with this email already exists. Sign in instead.');
+    user = { id: uid(), name: String(b.name ?? ''), phone: '', email, partner_admin_of: null, is_super_admin: false, created_at: nowIso() };
+    db.users.push(user);
+    persist();
+    // Demo mode skips the confirmation email.
+    return json({ status: 'signed_in', ...mockSession(db, user) }, { status: 201 });
+  }),
+
+  http.post(`${BASE}/auth/refresh`, async ({ request }) => {
+    const db = getDb();
+    const b = await body<{ refresh_token?: string }>(request);
+    const user = db.users.find((u) => `mock-refresh.${u.id}` === b.refresh_token);
+    if (!user) return fail(401, 'unauthorized', 'Your session has ended. Please sign in again.');
+    return json(mockSession(db, user));
+  }),
+  // Demo mode keeps uploaded logos in the browser as data URLs.
+  http.post(`${BASE}/branding/upload`, async ({ request }) => {
+    const form = await request.formData();
+    const file = form.get('file');
+    if (!(file instanceof File)) return fail(422, 'validation_failed', 'Choose an image file');
+    if (file.size > 1024 * 1024) return fail(413, 'too_large', 'Images must be 1 MB or smaller');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let bin = '';
+    bytes.forEach((b) => (bin += String.fromCharCode(b)));
+    return json({ url: `data:${file.type};base64,${btoa(bin)}` }, { status: 201 });
+  }),
+  http.post(`${BASE}/auth/forgot`, () => json({ sent: true })),
+  http.post(`${BASE}/auth/resend`, () => json({ sent: true })),
+  http.post(`${BASE}/auth/reset`, () => json({ updated: true })),
+  http.post(`${BASE}/auth/logout`, () => json({ signed_out: true })),
 
   http.get(`${BASE}/me`, async ({ request }) => {
     await latency();
@@ -1250,6 +1268,17 @@ export const allHandlers = [
 ];
 
 // ------------------------------------------------------------- shared shapes
+
+function mockSession(db: MockDb, user: MockDb['users'][number]) {
+  return {
+    access_token: `mock.${user.id}`,
+    refresh_token: `mock-refresh.${user.id}`,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    token_type: 'Bearer',
+    user,
+    memberships: db.memberships.filter((m) => m.user_id === user.id && m.status === 'active'),
+  };
+}
 
 function domainOut(d: { id: string; domain: string; verified: boolean }) {
   return { ...d, dns: { type: 'CNAME', name: d.domain, value: 'cname.crm-platform.example' } };

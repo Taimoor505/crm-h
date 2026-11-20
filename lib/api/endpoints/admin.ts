@@ -18,7 +18,16 @@ export async function updateWorkspaceSettings(workspaceId: string, patch: Partia
   return r.data;
 }
 
-/** TODO(backend): missing endpoint, served by MSW. */
+/** Uploads a logo or favicon; returns its public URL to save in branding. */
+export async function uploadBrandImage(file: File, kind: 'logo' | 'favicon', scope: 'workspace' | 'partner'): Promise<string> {
+  const form = new FormData();
+  form.set('file', file);
+  form.set('kind', kind);
+  form.set('scope', scope);
+  const r = await api.post<Raw>('/branding/upload', undefined, { form, workspaceId: scope === 'partner' ? false : undefined });
+  return r.url as string;
+}
+
 export async function listTemplates(): Promise<Template[]> {
   return (await api.get<Raw>('/templates', undefined, { workspaceId: false })).data;
 }

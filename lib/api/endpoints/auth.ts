@@ -1,11 +1,6 @@
-import { api } from '../client';
+import { api, API_BASE } from '../client';
 import { adaptMembership, adaptResolvedBranding, adaptUser, adaptWorkspace, type Raw } from '../adapters';
 import type { Me, ResolvedBranding, Role } from '../types';
-
-export async function sendOtp(phoneE164: string) {
-  const r = await api.post<Raw>('/auth/otp/send', { phone: phoneE164 }, { anonymous: true, workspaceId: false });
-  return { phone_e164: r.phone_e164 as string, expires_in_seconds: (r.expires_in_seconds as number) ?? 300, debug_code: (r.debug_code ?? r.sandbox_code ?? null) as string | null };
-}
 
 export interface VerifyResult {
   access_token: string;
@@ -15,16 +10,46 @@ export interface VerifyResult {
   memberships: ReturnType<typeof adaptMembership>[];
 }
 
-export async function verifyOtp(phoneE164: string, code: string): Promise<VerifyResult> {
-  const r = await api.post<Raw>('/auth/otp/verify', { phone: phoneE164, code }, { anonymous: true, workspaceId: false });
+function toSession(r: Raw): VerifyResult {
   return {
     access_token: r.access_token,
-    // TODO(auth): sandbox tokens have no refresh token or expiry (brief §12.7).
     refresh_token: r.refresh_token ?? null,
     expires_at: r.expires_at ? Number(r.expires_at) * 1000 : null,
     user_id: r.user.id,
     memberships: (r.memberships ?? []).map(adaptMembership),
   };
+}
+
+const PUBLIC = { anonymous: true, workspaceId: false } as const;
+
+export async function signInWithPassword(email: string, password: string): Promise<VerifyResult> {
+  return toSession(await api.post<Raw>('/auth/login', { email, password }, PUBLIC));
+}
+
+export type SignUpResult = { status: 'verify_email'; email: string } | { status: 'signed_in'; session: VerifyResult };
+
+export async function signUpWithPassword(input: { email: string; password: string; name: string }): Promise<SignUpResult> {
+  const r = await api.post<Raw>('/auth/signup', input, PUBLIC);
+  return r.status === 'signed_in' ? { status: 'signed_in', session: toSession(r) } : { status: 'verify_email', email: r.email };
+}
+
+export async function requestPasswordReset(email: string) {
+  await api.post('/auth/forgot', { email }, PUBLIC);
+}
+
+export async function resendVerification(email: string) {
+  await api.post('/auth/resend', { email }, PUBLIC);
+}
+
+/** Needs a session (from the reset or invite link, or a normal sign-in). */
+export async function setNewPassword(password: string) {
+  await api.post('/auth/reset', { password }, { workspaceId: false });
+}
+
+/** Revokes the refresh token on the server. Fire and forget; the local session is cleared regardless. */
+export function revokeSession(accessToken: string | null | undefined) {
+  if (!accessToken || accessToken.startsWith('mock.')) return;
+  void fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: { authorization: `Bearer ${accessToken}` }, keepalive: true }).catch(() => undefined);
 }
 
 export async function getMe(workspaceId: string | null): Promise<Me> {

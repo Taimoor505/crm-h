@@ -64,6 +64,8 @@ export interface Branding {
   supportWhatsapp: string | null;
   supportEmail: string | null;
   hideModules: ModuleKey[];
+  /** One of BRAND_FONTS (lib/theme/fonts.ts); null = default pairing. */
+  font: string | null;
 }
 
 export interface ResolvedBranding {
@@ -75,6 +77,7 @@ export interface ResolvedBranding {
 
 export interface WorkspaceSettings extends RegionSettings {
   name: string;
+  business_phone?: string | null;
   branding: Partial<Branding>;
 }
 

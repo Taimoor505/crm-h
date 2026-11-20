@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMe, type VerifyResult } from '@/lib/api/endpoints/auth';
+import { getMe, revokeSession, type VerifyResult } from '@/lib/api/endpoints/auth';
 import type { Me, Role, Workspace } from '@/lib/api/types';
 import { qk } from '@/hooks/queries/keys';
 import { setAppState } from '@/lib/app-state';
@@ -70,6 +70,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(() => {
+    revokeSession(getSession()?.accessToken);
     clearSession();
     qc.clear();
     setAppState({ readOnly: false, suspended: false });

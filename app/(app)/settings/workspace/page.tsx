@@ -10,6 +10,7 @@ import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
 import { useUpdateWorkspaceSettings } from '@/hooks/queries/admin';
 import { formatArea, formatDateTime, formatMoney, type RegionSettings } from '@/lib/format';
 import { formatPhone } from '@/lib/phone';
+import { PhoneInput, toPhoneValue } from '@/components/crm/PhoneInput';
 import { RegionFields } from '@/components/crm/RegionFields';
 import { SettingsCard, SettingsPage } from '@/components/settings/SettingsCard';
 
@@ -22,10 +23,12 @@ export default function WorkspaceSettingsPage() {
   const save = useUpdateWorkspaceSettings();
   const [name, setName] = useState(settings.name);
   const [region, setRegion] = useState<RegionSettings>(settings);
+  const [phone, setPhone] = useState(() => toPhoneValue(settings.business_phone ?? '', settings.default_phone_country));
 
   useEffect(() => {
     setName(settings.name);
     setRegion(settings);
+    setPhone(toPhoneValue(settings.business_phone ?? '', settings.default_phone_country));
   }, [settings]);
 
   const now = new Date();
@@ -43,7 +46,7 @@ export default function WorkspaceSettingsPage() {
           e.preventDefault();
           const { country, locale, currency, timezone, date_format, time_format, week_starts_on, area_unit, default_phone_country } = region;
           save.mutate(
-            { name: name.trim(), country, locale, currency, timezone, date_format, time_format, week_starts_on, area_unit, default_phone_country },
+            { name: name.trim(), business_phone: phone.e164 ?? null, country, locale, currency, timezone, date_format, time_format, week_starts_on, area_unit, default_phone_country },
             { onSuccess: () => toast.success(t('saved')) },
           );
         }}
@@ -52,6 +55,11 @@ export default function WorkspaceSettingsPage() {
         <SettingsCard>
           <Label htmlFor="ws-name">{t('workspace.name')}</Label>
           <Input id="ws-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5 h-11" />
+          <div className="mt-4 space-y-1.5">
+            <Label htmlFor="ws-phone">{t('workspace.businessPhone')}</Label>
+            <PhoneInput id="ws-phone" value={phone} onChange={setPhone} describedBy="ws-phone-hint" />
+            <p id="ws-phone-hint" className="text-sm text-gray-600">{t('workspace.businessPhoneHint')}</p>
+          </div>
         </SettingsCard>
         <SettingsCard title={t('workspace.region')}>
           <RegionFields value={region} onChange={setRegion} idPrefix="ws" extended />

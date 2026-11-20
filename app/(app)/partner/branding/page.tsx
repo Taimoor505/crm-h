@@ -22,6 +22,7 @@ export default function PartnerBrandingPage() {
         initial={q.data}
         saving={m.updateBranding.isPending}
         showModules={false}
+        scope="partner"
         onSave={(b) => m.updateBranding.mutate(b, { onSuccess: () => { toast.success(n('saved')); q.refetch(); } })}
       />
     </div>

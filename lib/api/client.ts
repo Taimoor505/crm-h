@@ -2,7 +2,7 @@
  * The one place that talks HTTP to /api/v1. Adds the session token and the
  * active workspace, and turns both backend error shapes into ApiError.
  */
-import { activeWorkspaceId, getSession } from '@/lib/auth/session';
+import { activeWorkspaceId, getSession, updateSession } from '@/lib/auth/session';
 
 export class ApiError extends Error {
   constructor(
@@ -81,7 +81,53 @@ export function onApiError(l: ErrorListener) {
   return () => errorListeners.delete(l);
 }
 
-export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+let refreshing: Promise<boolean> | null = null;
+
+/**
+ * Swaps the refresh token for a new access token (single flight across
+ * concurrent requests). Returns false only when the server says the session
+ * is over; a network failure keeps the session so the person isn't signed
+ * out by a flaky connection.
+ */
+export function refreshAccessToken(): Promise<boolean> {
+  if (refreshing) return refreshing;
+  const s = getSession();
+  if (!s?.refreshToken) return Promise.resolve(false);
+  const used = s.refreshToken;
+  refreshing = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ refresh_token: used }),
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        // Another tab may have rotated the token meanwhile; use theirs.
+        const now = getSession();
+        return Boolean(now?.refreshToken && now.refreshToken !== used);
+      }
+      const r = (await res.json()) as { access_token: string; refresh_token: string; expires_at: number };
+      updateSession({ accessToken: r.access_token, refreshToken: r.refresh_token, expiresAt: r.expires_at * 1000 });
+      return true;
+    } catch {
+      return true;
+    } finally {
+      setTimeout(() => {
+        refreshing = null;
+      }, 0);
+    }
+  })();
+  return refreshing;
+}
+
+const REFRESH_MARGIN_MS = 90_000;
+
+export async function request<T>(path: string, opts: RequestOptions = {}, retried = false): Promise<T> {
+  if (!opts.anonymous) {
+    const s = getSession();
+    if (s?.refreshToken && s.expiresAt && s.expiresAt - Date.now() < REFRESH_MARGIN_MS) await refreshAccessToken();
+  }
   const headers: Record<string, string> = { accept: 'application/json' };
   const session = getSession();
   if (!opts.anonymous && session?.accessToken) headers.authorization = `Bearer ${session.accessToken}`;
@@ -118,6 +164,9 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
     } catch {
       parsed = text;
     }
+  }
+  if (res.status === 401 && !opts.anonymous && !retried && getSession()?.refreshToken) {
+    if (await refreshAccessToken()) return request<T>(path, opts, true);
   }
   if (!res.ok) {
     const err = toApiError(res.status, parsed);

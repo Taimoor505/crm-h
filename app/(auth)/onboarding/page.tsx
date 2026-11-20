@@ -68,7 +68,7 @@ export default function OnboardingPage() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const ws = await createWorkspace({ name: name.trim(), template_key: templateKey, region, seed_samples: true, owner_name: ownerName || undefined });
+      const ws = await createWorkspace({ name: name.trim(), template_key: templateKey, region, seed_samples: false, owner_name: ownerName || undefined });
       let sent = 0;
       for (const row of invites) {
         if (!row.name.trim() || !row.phone.e164) continue;
