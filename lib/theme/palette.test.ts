@@ -23,7 +23,7 @@ describe('generatePalette', () => {
   });
 
   it('falls back to the default color on invalid input', () => {
-    expect(generatePalette('nope')['--brand-primary']).toBe('#059669');
+    expect(generatePalette('nope')['--brand-primary']).toBe('#4f46e5');
   });
 
   it('uses the primary as accent when none is given', () => {

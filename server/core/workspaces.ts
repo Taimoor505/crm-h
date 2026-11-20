@@ -118,7 +118,7 @@ export function validateRegion(r: RegionSettings) {
 /** Keys a partner or workspace may set. Anything else is dropped. */
 export const BRANDING_KEYS = [
   'appName', 'tagline', 'primaryColor', 'accentColor', 'logoText', 'logoUrl', 'faviconUrl',
-  'supportWhatsapp', 'supportEmail', 'hideModules', 'font',
+  'supportWhatsapp', 'supportEmail', 'hideModules', 'font', 'sidebarColor',
 ] as const;
 export const BRANDING_FONTS = ['Plus Jakarta Sans', 'Inter', 'DM Sans', 'Manrope', 'Poppins', 'Nunito Sans', 'IBM Plex Sans', 'Outfit', 'System'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -140,6 +140,7 @@ export function cleanBranding(patch: unknown): Record<string, unknown> {
     switch (k) {
       case 'primaryColor':
       case 'accentColor':
+      case 'sidebarColor':
         if (typeof v !== 'string' || !HEX.test(v)) throw new ApiError(422, 'validation_failed', `${k} must be a hex colour like #4F46E5`);
         out[k] = v.toUpperCase();
         break;

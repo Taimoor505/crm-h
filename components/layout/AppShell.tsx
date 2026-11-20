@@ -48,10 +48,10 @@ function WorkspaceSwitcher({ dark = false }: { dark?: boolean }) {
   const { me, workspace, switchWorkspace } = useSession();
   const router = useRouter();
   const memberships = me?.memberships ?? [];
-  if (memberships.length < 2) return <p className={cn('truncate text-xs', dark ? 'text-gray-400' : 'text-gray-500')}>{workspace?.name}</p>;
+  if (memberships.length < 2) return <p className={cn('truncate text-xs', dark ? 'text-sidebar-fg/60' : 'text-gray-500')}>{workspace?.name}</p>;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className={cn('flex max-w-full items-center gap-1 truncate text-xs', dark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900')} aria-label={t('switchWorkspace')}>
+      <DropdownMenuTrigger className={cn('flex max-w-full items-center gap-1 truncate text-xs', dark ? 'text-sidebar-fg/60 hover:text-sidebar-fg' : 'text-gray-600 hover:text-gray-900')} aria-label={t('switchWorkspace')}>
         <span className="truncate">{workspace?.name}</span>
         <ChevronsUpDown className="size-3 shrink-0" aria-hidden="true" />
       </DropdownMenuTrigger>
@@ -139,19 +139,19 @@ function Sidebar({ items }: { items: NavItem[] }) {
   const main = items.filter((i) => !SECONDARY.has(i.key));
   const rest = items.filter((i) => SECONDARY.has(i.key));
   return (
-    <aside className="relative sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-gray-950 text-gray-300 lg:flex">
+    <aside className="relative sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-sidebar text-sidebar-fg/80 lg:flex">
       {/* Soft brand glow at the top of the rail. */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(120%_80%_at_0%_0%,color-mix(in_oklab,var(--brand-primary)_35%,transparent),transparent_70%)]" />
       <div className="relative flex h-16 items-center gap-3 px-4">
         <BrandMark />
         <div className="min-w-0">
-          <p className="truncate font-heading text-sm font-semibold text-white">{branding.appName}</p>
+          <p className="truncate font-heading text-sm font-semibold text-sidebar-fg">{branding.appName}</p>
           <WorkspaceSwitcher dark />
         </div>
       </div>
       <nav aria-label={t('mainNav')} className="relative flex-1 overflow-y-auto px-3 py-3">
         {[main, rest].map((group, gi) => (
-          <div key={gi} className={cn('space-y-0.5', gi === 1 && 'mt-5 border-t border-white/10 pt-4')}>
+          <div key={gi} className={cn('space-y-0.5', gi === 1 && 'mt-5 border-t border-sidebar-fg/10 pt-4')}>
             {group.map((item) => {
               const active = isActive(item, pathname);
               const badge = item.key === 'followUps' ? due : 0;
@@ -162,11 +162,11 @@ function Sidebar({ items }: { items: NavItem[] }) {
                   aria-current={active ? 'page' : undefined}
                   className={cn(
                     'group relative flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors',
-                    active ? 'bg-white/10 font-semibold text-white' : 'font-medium text-gray-400 hover:bg-white/5 hover:text-white',
+                    active ? 'bg-sidebar-fg/10 font-semibold text-sidebar-fg' : 'font-medium text-sidebar-fg/60 hover:bg-sidebar-fg/5 hover:text-sidebar-fg',
                   )}
                 >
                   {active && <span aria-hidden="true" className="absolute inset-y-2 start-0 w-[3px] rounded-full bg-brand shadow-[0_0_12px_var(--brand-primary)]" />}
-                  <item.icon className={cn('size-[18px]', active ? 'text-white' : 'text-gray-500 group-hover:text-gray-300')} aria-hidden="true" />
+                  <item.icon className={cn('size-[18px]', active ? 'text-sidebar-fg' : 'text-sidebar-fg/55 group-hover:text-sidebar-fg/80')} aria-hidden="true" />
                   <span className="flex-1">{t(item.key)}</span>
                   {badge > 0 && (
                     <span className="min-w-5 rounded-full bg-brand px-1.5 py-0.5 text-center text-[11px] font-semibold tabular-nums text-on-brand">{badge > 99 ? '99+' : badge}</span>
@@ -177,11 +177,11 @@ function Sidebar({ items }: { items: NavItem[] }) {
           </div>
         ))}
       </nav>
-      <div className="relative m-3 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="relative m-3 flex items-center gap-3 rounded-xl border border-sidebar-fg/10 bg-sidebar-fg/5 p-3">
         <Avatar name={me?.user.name ?? ''} seed={me?.user.id ?? ''} size="sm" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">{me?.user.name || me?.user.email}</p>
-          {role && <p className="truncate text-xs text-gray-400">{r(role)}</p>}
+          <p className="truncate text-sm font-semibold text-sidebar-fg">{me?.user.name || me?.user.email}</p>
+          {role && <p className="truncate text-xs text-sidebar-fg/60">{r(role)}</p>}
         </div>
       </div>
     </aside>

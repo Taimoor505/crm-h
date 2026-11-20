@@ -87,6 +87,7 @@ export function adaptBrandingConfig(b: Raw = {}): Branding {
     supportWhatsapp: b.supportWhatsapp ?? null,
     supportEmail: b.supportEmail ?? null,
     font: typeof b.font === 'string' ? b.font : null,
+    sidebarColor: typeof b.sidebarColor === 'string' ? b.sidebarColor : null,
     hideModules: Array.isArray(b.hideModules) ? b.hideModules.filter((m: string) => MODULES.includes(m as ModuleKey)) : [],
   };
 }

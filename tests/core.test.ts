@@ -128,6 +128,9 @@ describe('onboarding and workspace settings', () => {
     expect(r.status).toBe(200);
     expect(r.body.data).toMatchObject({ country: 'GB', currency: 'GBP', timezone: 'Europe/London', business_phone: '+442079460958', branding: { primaryColor: '#0E7C66', font: 'Inter' } });
     expect((await call(settings.PATCH, { method: 'PATCH', as: owner, ws: wsId, params: { id: wsId }, body: { branding: { primaryColor: 'red' } } })).status).toBe(422);
+    const side = await call(settings.PATCH, { method: 'PATCH', as: owner, ws: wsId, params: { id: wsId }, body: { branding: { sidebarColor: '#ffffff' } } });
+    expect(side.body.data.branding.sidebarColor).toBe('#FFFFFF');
+    expect((await call(settings.PATCH, { method: 'PATCH', as: owner, ws: wsId, params: { id: wsId }, body: { branding: { sidebarColor: 'white' } } })).status).toBe(422);
     expect((await call(settings.PATCH, { method: 'PATCH', as: owner, ws: wsId, params: { id: wsId }, body: { timezone: 'Mars/Base' } })).status).toBe(422);
     const b = await call(branding.GET, { query: { workspace_id: wsId } });
     expect(b.body.branding).toMatchObject({ primaryColor: '#0E7C66', font: 'Inter', appName: 'Dubai Homes CRM' });

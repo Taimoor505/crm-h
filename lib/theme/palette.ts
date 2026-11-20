@@ -17,7 +17,8 @@ type Rgb = [number, number, number];
 
 const BLACK = '#000000';
 const WHITE = '#ffffff';
-export const DEFAULT_PRIMARY = '#059669';
+export const DEFAULT_PRIMARY = '#4f46e5';
+export const DEFAULT_SIDEBAR = '#0b0d12';
 
 export function parseHex(input: string): Rgb | null {
   const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(input.trim());
@@ -93,4 +94,11 @@ export function generatePalette(primary?: string | null, accent?: string | null)
 
 export function applyPalette(palette: BrandPalette, el: HTMLElement = document.documentElement) {
   for (const [k, v] of Object.entries(palette)) el.style.setProperty(k, v);
+}
+
+/** Sidebar background and a text colour that stays readable on it (white or black). */
+export function sidebarPalette(color?: string | null): { '--sidebar-bg': string; '--sidebar-fg': string } {
+  const rgb = parseHex(color ?? '') ?? parseHex(DEFAULT_SIDEBAR)!;
+  const hex = toHex(rgb);
+  return { '--sidebar-bg': hex, '--sidebar-fg': onColor(hex) };
 }

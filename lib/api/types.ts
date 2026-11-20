@@ -66,6 +66,8 @@ export interface Branding {
   hideModules: ModuleKey[];
   /** One of BRAND_FONTS (lib/theme/fonts.ts); null = default pairing. */
   font: string | null;
+  /** Sidebar background (hex); null = the default dark sidebar. */
+  sidebarColor: string | null;
 }
 
 export interface ResolvedBranding {

@@ -14,6 +14,9 @@
   --brand-on-primary: #ffffff;
   --brand-accent: #4f46e5;
   --brand-on-accent: #ffffff;
+  /* Sidebar (Settings › Branding); text colour is picked for contrast. */
+  --sidebar-bg: #0b0d12;
+  --sidebar-fg: #ffffff;
 
   /* shadcn/ui semantic tokens, wired to brand + Tailwind gray */
   --radius: 0.75rem;
@@ -48,6 +51,8 @@
   --color-on-brand: var(--brand-on-primary);
   --color-brand-accent: var(--brand-accent);
   --color-on-brand-accent: var(--brand-on-accent);
+  --color-sidebar: var(--sidebar-bg);
+  --color-sidebar-fg: var(--sidebar-fg);
 
   /* shadcn/ui */
   --color-background: var(--background);

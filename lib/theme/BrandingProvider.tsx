@@ -6,7 +6,7 @@ import { getBranding } from '@/lib/api/endpoints/auth';
 import { adaptBrandingConfig } from '@/lib/api/adapters';
 import type { Branding } from '@/lib/api/types';
 import { qk } from '@/hooks/queries/keys';
-import { applyPalette, generatePalette } from './palette';
+import { applyPalette, generatePalette, sidebarPalette } from './palette';
 import { applyFont } from './fonts';
 
 interface BrandingValue {
@@ -63,6 +63,7 @@ export function BrandingProvider({
   useEffect(() => {
     const palette = generatePalette(branding.primaryColor, branding.accentColor);
     applyPalette(palette);
+    for (const [k, v] of Object.entries(sidebarPalette(branding.sidebarColor))) document.documentElement.style.setProperty(k, v);
     applyFont(branding.font);
     document.title = branding.appName;
     let link = document.querySelector<HTMLLinkElement>('link[rel="icon"][data-brand]');

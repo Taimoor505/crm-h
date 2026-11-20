@@ -950,8 +950,8 @@
       "reset": "Reset",
       "logo": "Logo",
       "favicon": "Browser icon",
-      "logoHint": "PNG, SVG or WebP, square, at least 256 px. Max 1 MB.",
-      "faviconHint": "Square PNG or ICO, at least 64 px.",
+      "logoHint": "PNG, JPG, WebP or SVG, up to 10 MB. We resize it automatically so pages stay fast.",
+      "faviconHint": "Square image, up to 10 MB. Resized automatically.",
       "upload": "Upload",
       "replace": "Replace",
       "remove": "Remove",
@@ -966,7 +966,18 @@
       "sectionIdentity": "Identity",
       "sectionColors": "Colours and font",
       "sectionSupport": "Support contacts",
-      "inherits": "Starts from your partner's brand. Changes here apply to this workspace only."
+      "inherits": "Starts from your partner's brand. Changes here apply to this workspace only.",
+      "imageTooLarge": "That image is too large. Use one under 10 MB (SVG and ICO under 1 MB).",
+      "imageUnsupported": "Use a PNG, JPG, WebP, SVG or ICO image.",
+      "imageUnreadable": "We couldn't read that image. Try exporting it again as PNG.",
+      "sidebar": "Sidebar colour",
+      "sidebarHint": "Text switches between light and dark automatically so it stays readable.",
+      "sidebarDefault": "Dark (default)",
+      "sidebarMidnight": "Midnight",
+      "sidebarDeepBrand": "Deep brand",
+      "sidebarBrand": "Brand colour",
+      "sidebarLight": "Light",
+      "sidebarCustom": "Custom colour"
     }
   },
   "modules": {
