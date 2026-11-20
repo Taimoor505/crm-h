@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowDownUp, Download } from 'lucide-react';
+import { ArrowDownUp, Download, Target, Timer, Trophy, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,8 +21,16 @@ import { Chip } from '@/components/crm/DuePicker';
 import { Avatar } from '@/components/crm/badges';
 import { cn, downloadText, humanize, toCsv } from '@/lib/utils';
 
-const HBarChart = dynamic(() => import('@/components/crm/ReportCharts').then((m) => m.HBarChart), { ssr: false, loading: () => <CardSkeleton className="h-40" /> });
-const VBarChart = dynamic(() => import('@/components/crm/ReportCharts').then((m) => m.VBarChart), { ssr: false, loading: () => <CardSkeleton className="h-56" /> });
+// Charts load on demand so the page shell renders immediately.
+const load = <K extends keyof typeof import('@/components/crm/ReportVisuals')>(k: K, h: string) =>
+  dynamic(() => import('@/components/crm/ReportVisuals').then((m) => m[k] as never), { ssr: false, loading: () => <CardSkeleton className={h} /> });
+const StackedTrend = load('StackedTrend', 'h-60') as typeof import('@/components/crm/ReportVisuals').StackedTrend;
+const Donut = load('Donut', 'h-44') as typeof import('@/components/crm/ReportVisuals').Donut;
+const Funnel = load('Funnel', 'h-44') as typeof import('@/components/crm/ReportVisuals').Funnel;
+const SegmentBar = load('SegmentBar', 'h-40') as typeof import('@/components/crm/ReportVisuals').SegmentBar;
+const Columns = load('Columns', 'h-64') as typeof import('@/components/crm/ReportVisuals').Columns;
+const RankedShares = load('RankedShares', 'h-40') as typeof import('@/components/crm/ReportVisuals').RankedShares;
+const Sparkline = load('Sparkline', 'h-8') as typeof import('@/components/crm/ReportVisuals').Sparkline;
 
 type Preset = 'today' | 'last7' | 'thisMonth' | 'lastMonth' | 'custom';
 
@@ -93,6 +101,40 @@ export default function ReportsPage() {
     downloadText(`report_${range.from}_${range.to}.csv`, toCsv(rows));
     toast.success(t('exported'));
   }
+
+  // Trend by day, top 5 sources + Other (fixed colour order by size).
+  const trend = useMemo(() => {
+    const by = sources.data?.by_source ?? [];
+    const top = by.slice(0, 5).map((x) => x.source);
+    const series = top.map((k) => ({ key: k, label: humanize(k) }));
+    if (by.length > 5) series.push({ key: '__other', label: t('other') });
+    const days = new Map<string, Record<string, number | string>>();
+    const start = new Date(`${range.from}T00:00:00Z`).getTime();
+    const end = new Date(`${range.to}T00:00:00Z`).getTime();
+    for (let d = start; d <= end && days.size < 400; d += 86400_000) {
+      const key = new Date(d).toISOString().slice(0, 10);
+      const row: Record<string, number | string> = { label: formatDate(key, { ...s, date_format: 'dd MMM' }) };
+      for (const se of series) row[se.key] = 0;
+      days.set(key, row);
+    }
+    for (const r of sources.data?.by_day ?? []) {
+      const row = days.get(r.day);
+      if (!row) continue;
+      const k = top.includes(r.source) ? r.source : '__other';
+      row[k] = Number(row[k] ?? 0) + r.leads;
+    }
+    return { series, days: [...days.values()] };
+  }, [sources.data, range.from, range.to, s, t]);
+  const dailyTotals = trend.days.map((d) => trend.series.reduce((a, se) => a + Number(d[se.key] ?? 0), 0));
+  const sourceShares = useMemo(() => {
+    const by = sources.data?.by_source ?? [];
+    const top = by.slice(0, 5).map((x) => ({ label: x.source, value: x.leads, display: humanize(x.source) }));
+    const rest = by.slice(5).reduce((a, x) => a + x.leads, 0);
+    return rest ? [...top, { label: '__other', value: rest, display: t('other') }] : top;
+  }, [sources.data, t]);
+  const podium = useMemo(() => [...(agents.data?.agents ?? [])].filter((a) => a.won_value.amount_minor > 0 || a.deals_won > 0).sort((a, b) => b.won_value.amount_minor - a.won_value.amount_minor).slice(0, 3), [agents.data]);
+  const maxWon = Math.max(0, ...(agents.data?.agents ?? []).map((a) => a.won_value.amount_minor));
+  const formatMonth = (m: string) => formatDate(`${m}-01`, { ...s, date_format: 'MMM yyyy' });
 
   const anyError = [sources, speed, funnel, agents, won, lost].find((q) => q.isError);
   const overall = speed.data?.overall;
@@ -191,64 +233,102 @@ export default function ReportsPage() {
         <ErrorState onRetry={() => anyError.refetch()} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
             {[
-              { label: t('kpiNewLeads'), value: sources.data ? formatNumber(sources.data.total, s) : null },
-              { label: t('kpiWonValue'), value: won.data ? formatMoneyValue(won.data.total, s, { compact: true }) : null },
-              { label: t('kpiConversion'), value: funnel.data ? formatPercent(funnel.data.win_rate_pct === null ? null : funnel.data.win_rate_pct / 100, s) : null },
-              { label: t('kpiSpeed'), value: speed.data ? formatDuration(speed.data.overall?.median_seconds ?? null, s) : null },
+              { label: t('kpiNewLeads'), value: sources.data ? formatNumber(sources.data.total, s) : null, hint: t('kpiNewLeadsHint'), icon: UserPlus, tile: 'from-sky-500 to-blue-600', spark: true },
+              { label: t('kpiWonValue'), value: won.data ? formatMoneyValue(won.data.total, s, { compact: true }) : null, hint: won.data ? t('kpiWonValueHint', { count: won.data.total_deals }) : '', icon: Trophy, tile: 'from-emerald-500 to-teal-600' },
+              { label: t('kpiConversion'), value: funnel.data ? formatPercent(funnel.data.win_rate_pct === null ? null : funnel.data.win_rate_pct / 100, s) : null, hint: t('kpiConversionHint'), icon: Target, tile: 'from-violet-500 to-indigo-600' },
+              { label: t('kpiSpeed'), value: speed.data ? formatDuration(speed.data.overall?.median_seconds ?? null, s) : null, hint: t('kpiSpeedHint'), icon: Timer, tile: 'from-amber-400 to-orange-500' },
             ].map((k) =>
               k.value === null ? (
-                <CardSkeleton key={k.label} className="h-20" />
+                <CardSkeleton key={k.label} className="h-[132px] rounded-2xl" />
               ) : (
-                <div key={k.label} className="rounded-2xl border bg-card p-3 shadow-card">
-                  <p className="text-xs font-medium text-gray-600">{k.label}</p>
-                  <p className="mt-1 font-heading text-2xl font-bold tabular-nums text-gray-900">{k.value}</p>
+                <div key={k.label} className="flex min-h-[132px] flex-col justify-between rounded-2xl border bg-card p-4 shadow-raised">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-gray-600 lg:text-sm">{k.label}</p>
+                    <span className={cn('grid size-9 place-items-center rounded-xl bg-gradient-to-br text-white shadow-card', k.tile)} aria-hidden="true"><k.icon className="size-[18px]" /></span>
+                  </div>
+                  <p className="font-heading text-[28px] leading-none font-bold tracking-tight tabular-nums text-gray-900">{k.value}</p>
+                  {k.spark && dailyTotals.length > 1 ? <Sparkline values={dailyTotals} className="h-8" /> : <p className="truncate text-xs text-gray-600">{k.hint}</p>}
                 </div>
               ),
             )}
           </div>
 
+          <Section title={t('trend')}>
+            <div className="px-2 pb-4">
+              {trend.days.length && sources.data?.total ? (
+                <StackedTrend data={trend.days} series={trend.series} caption={t('trend')} />
+              ) : sources.data ? (
+                <EmptyState title={t('noData')} className="py-8" />
+              ) : (
+                <CardSkeleton className="h-60" />
+              )}
+            </div>
+          </Section>
+
           <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
             <Section title={t('bySource')}>
-              <div className="px-2 pb-3">
+              <div className="px-5 pb-5">
                 {sources.data?.by_source.length ? (
-                  <HBarChart caption={t('bySource')} valueLabel={t('leads')} data={sources.data.by_source.map((x) => ({ label: humanize(x.source), value: x.leads, display: formatNumber(x.leads, s) }))} />
+                  <Donut caption={t('bySource')} centerValue={formatNumber(sources.data.total, s)} centerLabel={t('totalLeads')} data={sourceShares} />
                 ) : sources.data ? (
                   <EmptyState title={t('noData')} className="py-8" />
                 ) : (
-                  <CardSkeleton className="h-40" />
+                  <CardSkeleton className="h-44" />
                 )}
               </div>
             </Section>
             <Section title={funnel.data ? `${t('funnel')} · ${funnel.data.pipeline.name}` : t('funnel')}>
-              <div className="px-2 pb-3">
+              <div className="px-5 pb-5">
                 {funnel.data?.deals ? (
-                  <HBarChart
+                  <Funnel
                     caption={t('funnel')}
-                    valueLabel={t('deals')}
-                    shades
-                    data={funnel.data.stages.filter((x) => x.kind !== 'lost').map((x) => ({ label: x.name, value: x.reached, display: t('funnelReached', { count: formatNumber(x.reached, s) }) }))}
+                    steps={funnel.data.stages.filter((x) => x.kind !== 'lost').map((x) => ({
+                      name: x.name,
+                      value: x.reached,
+                      display: formatNumber(x.reached, s),
+                      conversion: x.conversion_from_previous_pct === null ? null : t('funnelConversion', { pct: formatPercent(x.conversion_from_previous_pct / 100, s) }),
+                    }))}
                   />
                 ) : funnel.data ? (
+                  <EmptyState title={t('noData')} className="py-8" />
+                ) : (
+                  <CardSkeleton className="h-44" />
+                )}
+              </div>
+            </Section>
+            <Section title={t('speed')}>
+              <div className="space-y-4 px-5 pb-5">
+                {overall?.leads ? (
+                  <>
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-xs text-gray-600">{t('medianResponse')}</p>
+                        <p className="font-heading text-3xl font-bold tracking-tight tabular-nums text-gray-900">{formatDuration(overall.median_seconds ?? null, s)}</p>
+                      </div>
+                      <p className="text-sm text-gray-600 tabular-nums">{t('responded', { count: formatNumber(overall.responded, s), total: formatNumber(overall.leads, s) })}</p>
+                    </div>
+                    <SegmentBar caption={t('speed')} segments={speedBars.map((b, i) => ({ ...b, muted: i === 3 }))} />
+                  </>
+                ) : speed.data ? (
                   <EmptyState title={t('noData')} className="py-8" />
                 ) : (
                   <CardSkeleton className="h-40" />
                 )}
               </div>
             </Section>
-            <Section title={t('speed')}>
-              <div className="px-2 pb-3">
-                {overall?.leads ? <HBarChart caption={t('speed')} valueLabel={t('leads')} data={speedBars} shades /> : speed.data ? <EmptyState title={t('noData')} className="py-8" /> : <CardSkeleton className="h-40" />}
-              </div>
-            </Section>
             <Section title={t('lostReasons')}>
-              <div className="px-2 pb-3">
+              <div className="px-5 pb-5">
                 {lost.data?.reasons.length ? (
-                  <HBarChart
+                  <RankedShares
                     caption={t('lostReasons')}
-                    valueLabel={t('deals')}
-                    data={lost.data.reasons.map((x) => ({ label: x.reason, value: x.deals, display: `${formatNumber(x.deals, s)} · ${formatPercent(x.share_pct === null ? null : x.share_pct / 100, s)} · ${formatMoneyValue(x.value, s, { compact: true })}` }))}
+                    rows={lost.data.reasons.map((x) => ({
+                      label: x.reason,
+                      share: (x.share_pct ?? 0) / 100,
+                      primary: t('dealsOnMonth', { count: x.deals }),
+                      secondary: `${formatPercent(x.share_pct === null ? null : x.share_pct / 100, s)} · ${formatMoneyValue(x.value, s, { compact: true })}`,
+                    }))}
                   />
                 ) : lost.data ? (
                   <EmptyState title={t('noData')} className="py-8" />
@@ -262,11 +342,15 @@ export default function ReportsPage() {
           <Section title={t('wonByMonth')}>
             <div className="px-2 pb-3">
               {won.data?.months.length ? (
-                <VBarChart
+                <Columns
                   caption={t('wonByMonth')}
-                  valueLabel={t('value')}
                   tickFormatter={(v) => formatMoneyValue({ amount_minor: v, currency: won.data!.total.currency }, s, { compact: true })}
-                  data={won.data.months.map((m) => ({ label: m.month, value: m.value.amount_minor, display: `${formatMoneyValue(m.value, s)} · ${formatNumber(m.deals, s)} ${t('deals')}` }))}
+                  data={won.data.months.map((m) => ({
+                    label: formatMonth(m.month),
+                    value: m.value.amount_minor,
+                    display: formatMoneyValue(m.value, s, { compact: true }),
+                    note: t('dealsOnMonth', { count: m.deals }),
+                  }))}
                 />
               ) : won.data ? (
                 <EmptyState title={t('noData')} className="py-8" />
@@ -276,11 +360,27 @@ export default function ReportsPage() {
             </div>
           </Section>
 
+          {podium.length > 0 && (
+            <Section title={t('leaderboard')}>
+              <ol className="grid gap-3 px-5 pb-5 sm:grid-cols-3">
+                {podium.map((a, i) => (
+                  <li key={a.agent_id} className={cn('relative overflow-hidden rounded-2xl border p-4', i === 0 ? 'bg-gradient-to-br from-amber-50 to-white' : 'bg-gray-50/60')}>
+                    <span className={cn('absolute end-3 top-3 grid size-8 place-items-center rounded-full font-heading text-sm font-bold text-white shadow-card', ['bg-amber-500', 'bg-gray-400', 'bg-orange-700'][i])} aria-hidden="true">{i + 1}</span>
+                    <Avatar name={a.agent_name} seed={a.agent_id} size="lg" />
+                    <p className="mt-3 truncate font-semibold text-gray-900">{a.agent_name}</p>
+                    <p className="font-heading text-xl font-bold tracking-tight tabular-nums text-gray-900">{formatMoneyValue(a.won_value, s, { compact: true })}</p>
+                    <p className="text-xs text-gray-600">{t('leaderWon', { count: a.deals_won })}</p>
+                  </li>
+                ))}
+              </ol>
+            </Section>
+          )}
+
           <Section title={t('agentsTable')}>
             {sortedAgents.length ? (
               <div className="overflow-x-auto pb-2">
-                <table className="w-full min-w-[640px] text-sm">
-                  <thead className="text-xs text-gray-600">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="bg-gray-50/80 text-xs text-gray-600 uppercase">
                     <tr>
                       <SortHeader k="agent_name" label={t('colAgent')} />
                       <SortHeader k="assigned" label={t('colAssigned')} end />
@@ -293,7 +393,7 @@ export default function ReportsPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {sortedAgents.map((a) => (
-                      <tr key={a.agent_id}>
+                      <tr key={a.agent_id} className="hover:bg-gray-50">
                         <td className="px-3 py-2.5">
                           <span className="flex items-center gap-2">
                             <Avatar name={a.agent_name} seed={a.agent_id} size="sm" />
@@ -303,9 +403,18 @@ export default function ReportsPage() {
                         <td className="px-3 py-2.5 text-end tabular-nums">{formatNumber(a.assigned, s)}</td>
                         <td className="px-3 py-2.5 text-end tabular-nums">{formatNumber(a.contacted, s)}</td>
                         <td className="px-3 py-2.5 text-end tabular-nums">{formatNumber(a.follow_ups_done, s)}</td>
-                        <td className={cn('px-3 py-2.5 text-end tabular-nums', a.overdue > 0 && 'font-semibold text-red-700')}>{formatNumber(a.overdue, s)}</td>
+                        <td className="px-3 py-2.5 text-end">
+                          <span className={cn('tabular-nums', a.overdue > 0 && 'rounded-full bg-red-50 px-2 py-0.5 font-semibold text-red-700')}>{formatNumber(a.overdue, s)}</span>
+                        </td>
                         <td className="px-3 py-2.5 text-end tabular-nums">{formatNumber(a.deals_won, s)}</td>
-                        <td className="px-3 py-2.5 text-end font-medium tabular-nums">{formatMoneyValue(a.won_value, s)}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center justify-end gap-2">
+                            <div className="hidden h-1.5 w-20 overflow-hidden rounded-full bg-gray-100 sm:block" aria-hidden="true">
+                              <div className="h-full rounded-full bg-brand" style={{ width: `${maxWon && a.won_value.amount_minor > 0 ? Math.max(3, (a.won_value.amount_minor / maxWon) * 100) : 0}%` }} />
+                            </div>
+                            <span className="font-semibold tabular-nums">{formatMoneyValue(a.won_value, s, { compact: true })}</span>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

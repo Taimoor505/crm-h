@@ -14,6 +14,9 @@ const listSchema = z.object({
   tag: z.string().max(40).optional(),
   stage: z.uuid().optional(),
   updated_since: z.iso.datetime({ offset: true }).optional(),
+  created_within_days: z.coerce.number().int().min(1).max(365).optional(),
+  /** Leads still waiting for a reply to their latest enquiry. */
+  awaiting: z.enum(['true']).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().optional(),
 });
@@ -35,6 +38,8 @@ export const GET = userRoute({ allowWhenReadOnly: true }, async ({ req, tx, work
     q.tag && tx`${q.tag} = any(c.tags)`,
     q.stage && tx`exists (select 1 from public.deals d where d.contact_id = c.id and d.stage_id = ${q.stage} and d.deleted_at is null)`,
     q.updated_since && tx`c.updated_at >= ${q.updated_since}`,
+    q.created_within_days && tx`c.created_at >= now() - make_interval(days => ${q.created_within_days}::int)`,
+    q.awaiting && tx`c.last_enquiry_at is not null and (c.last_response_at is null or c.last_response_at < c.last_enquiry_at) and c.status not in ('won', 'lost', 'cold')`,
     text && (digits.length >= 3
       ? tx`(lower(c.name) like ${'%' + text + '%'} or c.phone_e164 like ${'%' + digits + '%'} or lower(coalesce(c.email, '')) like ${'%' + text + '%'})`
       : tx`(lower(c.name) like ${'%' + text + '%'} or lower(coalesce(c.email, '')) like ${'%' + text + '%'} or ${text} = any(c.tags))`),

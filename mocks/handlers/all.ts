@@ -16,6 +16,9 @@ import { BASE, authorize, body, dayBounds, fail, isResponse, latency, localDay, 
 
 const json = HttpResponse.json;
 
+// Demo-mode saved views (kept in memory for the session).
+const mockViews: { id: string; workspace_id: string; user_id: string; name: string; filters: Record<string, string>; shared: boolean }[] = [];
+
 // ------------------------------------------------------------- helpers
 
 function normalizePhone(input: unknown, country = 'US'): string | null {
@@ -320,10 +323,12 @@ export const allHandlers = [
       .filter((c) => {
         if (c.workspace_id !== ctx.ws.id || c.deleted_at || !canSee(ctx, c.owner_id)) return false;
         if (q.get('source') && c.source !== q.get('source')) return false;
-        if (q.get('owner') && (q.get('owner') === 'none' ? c.owner_id !== null : c.owner_id !== q.get('owner'))) return false;
+        if (q.get('owner') && (q.get('owner') === 'none' ? c.owner_id !== null : c.owner_id !== (q.get('owner') === 'me' ? ctx.user.id : q.get('owner')))) return false;
         if (q.get('status') && c.status !== q.get('status')) return false;
         if (q.get('tag') && !c.tags.includes(q.get('tag')!)) return false;
         if (q.get('stage') && !db.deals.some((d) => d.contact_id === c.id && d.stage_id === q.get('stage') && !d.deleted_at)) return false;
+        if (q.get('created_within_days') && Date.now() - Date.parse(c.created_at) > Number(q.get('created_within_days')) * 86400_000) return false;
+        if (q.get('awaiting') === 'true' && !(c.last_enquiry_at && (!c.last_response_at || c.last_response_at < c.last_enquiry_at) && !['won', 'lost', 'cold'].includes(c.status))) return false;
         if (text) {
           const hay = `${c.name} ${c.email ?? ''} ${c.tags.join(' ')}`.toLowerCase();
           if (!hay.includes(text) && !(digits.length >= 3 && c.phone_e164.includes(digits))) return false;
@@ -449,6 +454,40 @@ export const allHandlers = [
     secondary.deleted_at = nowIso();
     activity(db, ctx.ws.id, primary.id, 'system', ctx.user.id, `Merged with ${secondary.name}`);
     return json({ contact: contactOut(primary) });
+  })),
+
+  http.get(`${BASE}/saved-views`, withAuth({}, (ctx) => json({ data: mockViews.filter((v) => v.workspace_id === ctx.ws.id && (v.user_id === ctx.user.id || v.shared)) }))),
+  http.post(`${BASE}/saved-views`, withAuth({}, async (ctx, req) => {
+    const b = await body<{ name?: string; filters?: Record<string, string>; shared?: boolean }>(req);
+    if (!b.name?.trim()) return fail(422, 'validation_failed', 'Name the view');
+    if (b.shared && !ctx.isManager) return fail(403, 'forbidden', 'Only owners and managers can share views with the team');
+    const v = { id: uid(), workspace_id: ctx.ws.id, user_id: ctx.user.id, name: b.name.trim(), filters: b.filters ?? {}, shared: Boolean(b.shared) };
+    mockViews.push(v);
+    return json({ data: v }, { status: 201 });
+  })),
+  http.delete(`${BASE}/saved-views/:id`, withAuth({}, (ctx, _r, p) => {
+    const i = mockViews.findIndex((v) => v.id === p.id && v.user_id === ctx.user.id);
+    if (i < 0) return fail(404, 'not_found', 'View not found');
+    mockViews.splice(i, 1);
+    return json({ data: { removed: true } });
+  })),
+
+  http.get(`${BASE}/contacts/:id/summary`, withAuth({}, (ctx, _r, p, db) => {
+    const c = db.contacts.find((x) => x.id === p.id && x.workspace_id === ctx.ws.id && !x.deleted_at);
+    if (!c) return fail(404, 'not_found', 'Contact not found');
+    const acts = db.activities.filter((a) => a.contact_id === c.id);
+    const tasks = db.tasks.filter((t) => t.contact_id === c.id);
+    const deals = db.deals.filter((d) => d.contact_id === c.id && !d.deleted_at);
+    const kind = (d: MDeal) => db.stages.find((st) => st.id === d.stage_id)?.kind ?? 'open';
+    const open = deals.filter((d) => kind(d) === 'open');
+    const won = deals.filter((d) => kind(d) === 'won');
+    const openTasks = tasks.filter((t) => t.status === 'open').sort((a, b) => a.due_at.localeCompare(b.due_at));
+    return json({ data: {
+      activity: { calls: acts.filter((a) => a.type === 'call').length, notes: acts.filter((a) => a.type === 'note').length, whatsapp: acts.filter((a) => a.type === 'whatsapp').length, stage_changes: acts.filter((a) => a.type === 'stage_change').length, total: acts.length },
+      follow_ups: { open: openTasks.length, overdue: openTasks.filter((t) => Date.parse(t.due_at) < Date.now()).length, done: tasks.filter((t) => t.status === 'done').length, next_due_at: openTasks[0]?.due_at ?? null },
+      deals: { open_count: open.length, open_value_minor: open.reduce((a, d) => a + d.value_minor, 0), won_count: won.length, won_value_minor: won.reduce((a, d) => a + d.value_minor, 0), lost_count: deals.length - open.length - won.length, currency: deals[0]?.currency ?? ctx.ws.region.currency, oldest_open_stage_at: open.map((d) => d.stage_entered_at).sort()[0] ?? null },
+      contact: { created_at: c.created_at, last_activity_at: c.last_activity_at, first_response_at: c.first_response_at, last_response_at: c.last_response_at, last_enquiry_at: c.last_enquiry_at, status: c.status },
+    } });
   })),
 
   http.get(`${BASE}/contacts/:id/timeline`, withAuth({}, (ctx, req, p, db) => {

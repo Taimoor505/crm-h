@@ -20,6 +20,7 @@ import * as merge from '@/app/api/v1/contacts/[id]/merge/route';
 import * as notes from '@/app/api/v1/contacts/[id]/notes/route';
 import * as calls from '@/app/api/v1/contacts/[id]/calls/route';
 import * as timeline from '@/app/api/v1/contacts/[id]/timeline/route';
+import * as summary from '@/app/api/v1/contacts/[id]/summary/route';
 import * as pipelines from '@/app/api/v1/pipelines/route';
 import * as stages from '@/app/api/v1/pipelines/[id]/stages/route';
 import * as stageDel from '@/app/api/v1/pipelines/[id]/stages/[stageId]/route';
@@ -34,6 +35,8 @@ import * as invites from '@/app/api/v1/invites/route';
 import * as memberships from '@/app/api/v1/memberships/[id]/route';
 import * as waHook from '@/app/api/v1/webhooks/whatsapp/route';
 import * as conversations from '@/app/api/v1/conversations/route';
+import * as views from '@/app/api/v1/saved-views/route';
+import * as view from '@/app/api/v1/saved-views/[id]/route';
 import * as partnerWs from '@/app/api/v1/partner/workspaces/route';
 import * as partnerBranding from '@/app/api/v1/partner/branding/route';
 import { createHmac } from 'node:crypto';
@@ -191,6 +194,9 @@ describe('contacts, deals and pipelines', () => {
     expect(after.first_response_at).not.toBeNull();
     const as = await call(assign.POST, { method: 'POST', as: t.manager, ws: t.ws, params: { id: c.id }, body: { user_id: t.bilal } });
     expect(as.body.data).toEqual({ contact_id: c.id, owner_id: t.bilal, changed: true });
+    const sum = await call(summary.GET, { as: t.manager, ws: t.ws, params: { id: c.id } });
+    expect(sum.body.data.activity).toMatchObject({ calls: 1, notes: 1 });
+    expect(sum.body.data.contact.first_response_at).not.toBeNull();
     const tl = await call(timeline.GET, { as: t.manager, ws: t.ws, params: { id: c.id } });
     expect(tl.body.data.map((a: { type: string }) => a.type)).toEqual(expect.arrayContaining(['note', 'call', 'assignment']));
     const other = (await call(contacts.POST, { method: 'POST', as: t.manager, ws: t.ws, body: { name: 'Zara (old)', phone: '03211113333', tags: ['vip'] } })).body.contact;
@@ -293,5 +299,28 @@ describe('internal functions', () => {
     });
     await expect(tryAs(`select public.enqueue_job('notification.deliver', '{}'::jsonb, null, now(), null, null)`)).rejects.toThrow(/permission denied/);
     await expect(tryAs(`select public.create_notification('${t.ws}', '${t.sara}', 'lead.assigned', 'x', null, '{}'::jsonb, 'normal', null)`)).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe('saved views and new list filters', () => {
+  it('saves personal and shared views; filters by age and awaiting reply', async () => {
+    const t = await team('Views Co');
+    const mine = await call(views.POST, { method: 'POST', as: t.ali, ws: t.ws, body: { name: 'My hot leads', filters: { owner: 'me', tag: 'hot' } } });
+    expect(mine.status).toBe(201);
+    expect((await call(views.POST, { method: 'POST', as: t.ali, ws: t.ws, body: { name: 'Team', filters: {}, shared: true } })).status).toBe(403);
+    await call(views.POST, { method: 'POST', as: t.manager, ws: t.ws, body: { name: 'Unassigned this week', filters: { owner: 'none', created_within_days: 7 }, shared: true } });
+    const list = await call(views.GET, { as: t.sara, ws: t.ws });
+    expect(list.body.data.map((v: { name: string }) => v.name)).toEqual(['Unassigned this week']);
+    expect((await call(view.DELETE, { method: 'DELETE', as: t.sara, ws: t.ws, params: { id: mine.body.data.id } })).status).toBe(404);
+    expect((await call(view.DELETE, { method: 'DELETE', as: t.ali, ws: t.ws, params: { id: mine.body.data.id } })).status).toBe(200);
+
+    const fresh = (await call(contacts.POST, { method: 'POST', as: t.manager, ws: t.ws, body: { name: 'Fresh', phone: '03001112233' } })).body.contact;
+    const old = (await call(contacts.POST, { method: 'POST', as: t.manager, ws: t.ws, body: { name: 'Old', phone: '03001112244' } })).body.contact;
+    await admin`update public.contacts set created_at = now() - interval '20 days' where id = ${old.id}`;
+    const recent = await call(contacts.GET, { as: t.manager, ws: t.ws, query: { created_within_days: '7' } });
+    expect(recent.body.data.map((c: { id: string }) => c.id)).toEqual([fresh.id]);
+    await call(calls.POST, { method: 'POST', as: t.manager, ws: t.ws, params: { id: old.id }, body: { outcome: 'answered' } });
+    const waiting = await call(contacts.GET, { as: t.manager, ws: t.ws, query: { awaiting: 'true' } });
+    expect(waiting.body.data.map((c: { id: string }) => c.id)).toEqual([fresh.id]);
   });
 });

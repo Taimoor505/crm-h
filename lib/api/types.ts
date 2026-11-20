@@ -515,3 +515,11 @@ export interface CommissionStatement {
   workspaces: { workspace_id: string; workspace_name: string; collected: Money; commission: Money; floor_applied: boolean; status: string }[];
   total_commission: Money | null;
 }
+
+/** GET /contacts/:id/summary */
+export interface ContactSummary {
+  activity: { calls: number; notes: number; whatsapp: number; stage_changes: number; total: number };
+  follow_ups: { open: number; overdue: number; done: number; next_due_at: string | null };
+  deals: { open_count: number; open_value: Money; won_count: number; won_value: Money; lost_count: number; oldest_open_stage_at: string | null };
+  contact: { created_at: string; last_activity_at: string | null; first_response_at: string | null; last_response_at: string | null; last_enquiry_at: string | null; status: string };
+}

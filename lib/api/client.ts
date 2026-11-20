@@ -2,7 +2,7 @@
  * The one place that talks HTTP to /api/v1. Adds the session token and the
  * active workspace, and turns both backend error shapes into ApiError.
  */
-import { activeWorkspaceId, getSession, updateSession } from '@/lib/auth/session';
+import { activeWorkspaceId, clearSession, getSession, isIdleExpired, touchActivity, updateSession } from '@/lib/auth/session';
 
 export class ApiError extends Error {
   constructor(
@@ -125,6 +125,14 @@ const REFRESH_MARGIN_MS = 90_000;
 
 export async function request<T>(path: string, opts: RequestOptions = {}, retried = false): Promise<T> {
   if (!opts.anonymous) {
+    if (isIdleExpired(getSession())) {
+      // 24 hours without activity: sign out (the 401 handler sends people to /login).
+      clearSession();
+      const err = new ApiError(401, 'session_idle', 'Signed out after 24 hours of inactivity');
+      errorListeners.forEach((l) => l(err));
+      throw err;
+    }
+    touchActivity();
     const s = getSession();
     if (s?.refreshToken && s.expiresAt && s.expiresAt - Date.now() < REFRESH_MARGIN_MS) await refreshAccessToken();
   }

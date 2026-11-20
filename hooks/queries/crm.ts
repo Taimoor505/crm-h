@@ -111,6 +111,21 @@ export function useMergeContacts() {
   });
 }
 
+export function useSavedViews() {
+  const ws = useWorkspaceId();
+  const qc = useQueryClient();
+  const list = useQuery({ queryKey: qk.savedViews(ws), queryFn: crm.listSavedViews, enabled: Boolean(ws), staleTime: 5 * 60_000 });
+  const invalidate = () => qc.invalidateQueries({ queryKey: qk.savedViews(ws) });
+  const create = useMutation({ mutationFn: crm.createSavedView, onSuccess: invalidate });
+  const remove = useMutation({ mutationFn: crm.deleteSavedView, onSuccess: invalidate });
+  return { list, create, remove };
+}
+
+export function useContactSummary(id: string) {
+  const ws = useWorkspaceId();
+  return useQuery({ queryKey: qk.contactSummary(ws, id), queryFn: () => crm.getContactSummary(id), enabled: Boolean(ws && id), staleTime: 10_000 });
+}
+
 export function useTimeline(id: string) {
   const ws = useWorkspaceId();
   return useInfiniteQuery({

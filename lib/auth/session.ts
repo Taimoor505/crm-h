@@ -13,6 +13,23 @@ export interface Session {
   workspaceId: string | null;
   /** Set while a partner admin is viewing a client workspace. */
   impersonating: { workspaceId: string; workspaceName: string; returnTo: string | null } | null;
+  /** epoch ms of the last tap, key press or request; drives the idle sign-out. */
+  lastActiveAt?: number | null;
+}
+
+/** Signed out after this long with no activity. Active people stay signed in (tokens refresh). */
+export const IDLE_LIMIT_MS = 24 * 3600_000;
+const TOUCH_EVERY_MS = 60_000;
+
+export function isIdleExpired(s: Session | null, now = Date.now()): boolean {
+  return Boolean(s?.lastActiveAt && now - s.lastActiveAt > IDLE_LIMIT_MS);
+}
+
+/** Records activity (at most once a minute; shared across tabs through storage). */
+export function touchActivity(now = Date.now()) {
+  const s = getSession();
+  if (!s || isIdleExpired(s, now)) return;
+  if (!s.lastActiveAt || now - s.lastActiveAt > TOUCH_EVERY_MS) setSession({ ...s, lastActiveAt: now });
 }
 
 const STORAGE_KEY = 'crm.session.v1';

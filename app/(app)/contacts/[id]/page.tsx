@@ -17,10 +17,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
-  useAddNote, useAssignContact, useContact, useContactDeals, useFields, useMemberNames, useMembers, useMergeContacts, usePipelines,
+  useAddNote, useAssignContact, useContact, useContactDeals, useContactSummary, useFields, useMemberNames, useMembers, useMergeContacts, usePipelines,
   useTimeline, useUpdateContact,
 } from '@/hooks/queries/crm';
 import { useContactTasks } from '@/hooks/queries/work';
+import { LeadStats, NextBestAction } from '@/components/crm/LeadInsights';
 import { qk } from '@/hooks/queries/keys';
 import { useWorkspaceSettings } from '@/hooks/useWorkspaceSettings';
 import { useWorkspaceId } from '@/lib/auth/SessionProvider';
@@ -77,6 +78,7 @@ function ContactView({ contact }: { contact: Contact }) {
   const { can, canWrite } = usePermissions();
   const ownerName = useMemberNames();
   const deals = useContactDeals(contact.id);
+  const summary = useContactSummary(contact.id);
   const pipelines = usePipelines();
   const [sheet, setSheet] = useState<SheetName>(null);
 
@@ -187,6 +189,30 @@ function ContactView({ contact }: { contact: Contact }) {
         </div>
       </header>
 
+      <NextBestAction
+        summary={summary.data}
+        action={(kind) => {
+          if (!canWrite) return null;
+          const btn = 'inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-white px-3.5 text-sm font-semibold text-gray-900 shadow-card ring-1 ring-black/5 hover:bg-gray-50';
+          switch (kind) {
+            case 'respond':
+              return <CallButton contactId={contact.id} name={contact.name} phone={contact.phone_e164} dealId={primaryDeal?.id} className="h-10 rounded-[10px] border-transparent bg-red-700 px-3.5 text-sm font-semibold text-white hover:bg-red-800 [&_*]:text-white" label />;
+            case 'overdue':
+              return <a href="#open-follow-ups" className={btn}>{t('nbaOpenFollowUps')}</a>;
+            case 'stuck':
+              return <button type="button" className={btn} onClick={() => setSheet('move')}>{t('nbaMoveDeal')}</button>;
+            case 'noFollowUp':
+              return <button type="button" className={btn} onClick={() => setSheet('followup')}>{t('nbaSchedule')}</button>;
+            case 'noDeal':
+              return <button type="button" className={btn} onClick={() => setSheet('deal')}>{t('nbaCreateDeal')}</button>;
+            case 'quiet':
+              return <WhatsAppButton contactId={contact.id} name={contact.name} phone={contact.phone_e164} className="h-10 rounded-[10px] border-transparent bg-emerald-700 px-3.5 text-sm font-semibold text-white hover:bg-emerald-800 [&_*]:text-white" label />;
+            default:
+              return null;
+          }
+        }}
+      />
+
       <div className="flex gap-2">
         <CallButton contactId={contact.id} name={contact.name} phone={contact.phone_e164} dealId={primaryDeal?.id} className="min-h-16 min-w-0 flex-1 basis-0 flex-col justify-center gap-1 rounded-xl border-transparent bg-brand px-1 text-xs font-semibold text-on-brand shadow-card hover:bg-brand-hover" label />
         <WhatsAppButton contactId={contact.id} name={contact.name} phone={contact.phone_e164} className="min-h-16 min-w-0 flex-1 basis-0 flex-col justify-center gap-1 rounded-xl border-transparent bg-emerald-700 px-1 text-xs font-semibold text-white shadow-card hover:bg-emerald-800 [&_*]:text-white" label />
@@ -208,7 +234,11 @@ function ContactView({ contact }: { contact: Contact }) {
         )}
       </div>
 
-      <OpenFollowUps contactId={contact.id} />
+      <LeadStats summary={summary.data} />
+
+      <div id="open-follow-ups" className="scroll-mt-24">
+        <OpenFollowUps contactId={contact.id} />
+      </div>
 
       <Tabs defaultValue="timeline">
         <TabsList className="h-11 w-full">

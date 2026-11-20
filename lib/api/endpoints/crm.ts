@@ -4,7 +4,7 @@ import {
 } from '../adapters';
 import { toMinor } from '@/lib/format';
 import type {
-  Activity, CallOutcome, Contact, CustomFieldDef, CustomFieldType, Deal, DuplicateCheck, Page, Pipeline,
+  Activity, CallOutcome, Contact, ContactSummary, CustomFieldDef, CustomFieldType, Deal, DuplicateCheck, Page, Pipeline,
   ReasonPresets, Stage, StageKind, TeamMember, WorkspaceRole,
 } from '../types';
 
@@ -17,6 +17,30 @@ export interface ContactFilters {
   tag?: string;
   status?: string;
   stage?: string;
+  /** Leads added in the last N days. */
+  created_within_days?: string;
+  /** 'true': still waiting for a reply to their latest enquiry. */
+  awaiting?: string;
+}
+
+export interface SavedView {
+  id: string;
+  name: string;
+  filters: ContactFilters;
+  shared: boolean;
+  user_id: string;
+}
+
+export async function listSavedViews(): Promise<SavedView[]> {
+  return (await api.get<Raw>('/saved-views')).data;
+}
+
+export async function createSavedView(input: { name: string; filters: ContactFilters; shared: boolean }): Promise<SavedView> {
+  return (await api.post<Raw>('/saved-views', input)).data;
+}
+
+export async function deleteSavedView(id: string) {
+  await api.delete(`/saved-views/${id}`);
 }
 
 export async function listContacts(f: ContactFilters & { cursor?: string | null; limit?: number }): Promise<Page<Contact>> {
@@ -259,4 +283,17 @@ export async function invite(input: { name: string; phone?: string; email?: stri
 export async function updateMembership(id: string, patch: { role?: WorkspaceRole; status?: 'active' | 'suspended' }) {
   const r = await api.patch<Raw>(`/memberships/${id}`, patch);
   return r.membership as Raw;
+}
+
+export async function getContactSummary(id: string): Promise<ContactSummary> {
+  const d = (await api.get<Raw>(`/contacts/${id}/summary`)).data;
+  const cur = d.deals.currency;
+  return {
+    ...d,
+    deals: {
+      ...d.deals,
+      open_value: { amount_minor: d.deals.open_value_minor, currency: cur },
+      won_value: { amount_minor: d.deals.won_value_minor, currency: cur },
+    },
+  };
 }

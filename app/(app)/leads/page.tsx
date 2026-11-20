@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Download, Filter, Search, Tag, UserCheck, Columns3, X } from 'lucide-react';
+import { Download, Filter, Search, Tag, UserCheck, Columns3, X, CircleDot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ import { runBulk } from '@/lib/bulk';
 import { dayKey } from '@/lib/format';
 import { formatPhone } from '@/lib/phone';
 import type { Contact } from '@/lib/api/types';
+import { SavedViewsBar } from '@/components/crm/SavedViews';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Avatar, OwnerAvatar, SourceBadge, StatusBadge } from '@/components/crm/badges';
 import { RelativeTime } from '@/components/crm/values';
@@ -53,6 +54,8 @@ function useUrlFilters(): [ContactFilters, (patch: Partial<ContactFilters>) => v
     status: params.get('status') ?? undefined,
     owner: params.get('owner') ?? undefined,
     tag: params.get('tag') ?? undefined,
+    created_within_days: params.get('created_within_days') ?? undefined,
+    awaiting: params.get('awaiting') ?? undefined,
   };
   const set = (patch: Partial<ContactFilters>) => {
     const next = new URLSearchParams(params.toString());
@@ -96,7 +99,7 @@ function Leads() {
   const sources = useReport('sources', { from });
   const sourceChips = (sources.data?.by_source ?? []).slice(0, 8).map((x) => x.source);
 
-  const activeCount = [filters.status, filters.owner, filters.tag].filter(Boolean).length;
+  const activeCount = [filters.status, filters.owner, filters.tag, filters.created_within_days, filters.awaiting].filter(Boolean).length;
   const hasFilters = Boolean(filters.q || filters.source || activeCount);
   const selectedRows = rows.filter((r) => selected.has(r.id));
 
@@ -147,6 +150,13 @@ function Leads() {
             )}
           </Button>
         </div>
+        <SavedViewsBar
+          filters={filters}
+          onApply={(f) => {
+            setSearch(f.q ?? '');
+            setFilters(f);
+          }}
+        />
         {sourceChips.length > 0 && (
           <div role="group" aria-label={t('sourceFilter')} className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0">
             <Chip selected={!filters.source} onClick={() => setFilters({ source: undefined })} className="shrink-0">
@@ -177,7 +187,7 @@ function Leads() {
                   className="h-11"
                   onClick={() => {
                     setSearch('');
-                    setFilters({ q: undefined, source: undefined, status: undefined, owner: undefined, tag: undefined });
+                    setFilters({ q: undefined, source: undefined, status: undefined, owner: undefined, tag: undefined, created_within_days: undefined, awaiting: undefined });
                   }}
                 >
                   {c('clearAll')}
@@ -456,7 +466,7 @@ function ExportAllButton() {
   );
 }
 
-type BulkAction = 'assign' | 'tag' | 'pipeline' | null;
+type BulkAction = 'assign' | 'tag' | 'pipeline' | 'status' | null;
 
 function BulkBar({ rows, onDone }: { rows: Contact[]; onDone: () => void }) {
   const t = useTranslations('leads');
@@ -470,6 +480,8 @@ function BulkBar({ rows, onDone }: { rows: Contact[]; onDone: () => void }) {
   const [action, setAction] = useState<BulkAction>(null);
   const [assignee, setAssignee] = useState('');
   const [tag, setTag] = useState('');
+  const [status, setStatus] = useState('');
+  const st = useTranslations('contactStatus');
   const [pipelineId, setPipelineId] = useState('');
   const [stageId, setStageId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -502,6 +514,10 @@ function BulkBar({ rows, onDone }: { rows: Contact[]; onDone: () => void }) {
         <button type="button" className={btn} onClick={() => setAction('tag')}>
           <Tag className="size-4" aria-hidden="true" />
           {t('bulkTag')}
+        </button>
+        <button type="button" className={btn} onClick={() => setAction('status')}>
+          <CircleDot className="size-4" aria-hidden="true" />
+          {t('bulkStatus')}
         </button>
         <button type="button" className={btn} onClick={() => setAction('pipeline')}>
           <Columns3 className="size-4" aria-hidden="true" />
@@ -547,6 +563,31 @@ function BulkBar({ rows, onDone }: { rows: Contact[]; onDone: () => void }) {
             {(members.data ?? []).filter((m) => m.status === 'active').map((m) => (
               <SelectItem key={m.user_id} value={m.user_id}>
                 {m.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </ResponsiveSheet>
+
+      <ResponsiveSheet
+        open={action === 'status'}
+        onOpenChange={(o) => !o && setAction(null)}
+        title={t('statusTitle', { count: rows.length })}
+        footer={
+          <Button className="h-11 w-full" disabled={busy || !status} onClick={() => run((r) => updateContact(r.id, { status }))}>
+            {c('apply')}
+          </Button>
+        }
+      >
+        <Label htmlFor="bulk-status">{t('statusLabel')}</Label>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger id="bulk-status" className="mt-1.5 h-11 w-full">
+            <SelectValue placeholder={c('select')} />
+          </SelectTrigger>
+          <SelectContent>
+            {([...STATUSES, 'won', 'lost'] as const).map((x) => (
+              <SelectItem key={x} value={x}>
+                {st(x)}
               </SelectItem>
             ))}
           </SelectContent>

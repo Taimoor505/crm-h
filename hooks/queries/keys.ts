@@ -13,7 +13,10 @@ export const qk = {
 
   contacts: (ws: string, f?: ContactFilters) => (f ? ([ws, 'contacts', f] as const) : ([ws, 'contacts'] as const)),
   contact: (ws: string, id: string) => [ws, 'contact', id] as const,
+  savedViews: (ws: string) => [ws, 'saved-views'] as const,
   timeline: (ws: string, id: string) => [ws, 'timeline', id] as const,
+  /** Under the timeline key, so anything that refreshes the timeline refreshes this too. */
+  contactSummary: (ws: string, id: string) => [ws, 'timeline', id, 'summary'] as const,
   duplicate: (ws: string, phone: string) => [ws, 'duplicate', phone] as const,
 
   pipelines: (ws: string) => [ws, 'pipelines'] as const,

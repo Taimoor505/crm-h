@@ -6,7 +6,7 @@ import { getMe, revokeSession, type VerifyResult } from '@/lib/api/endpoints/aut
 import type { Me, Role, Workspace } from '@/lib/api/types';
 import { qk } from '@/hooks/queries/keys';
 import { setAppState } from '@/lib/app-state';
-import { clearSession, getSession, setSession, subscribeSession, updateSession, type Session } from './session';
+import { clearSession, getSession, isIdleExpired, setSession, subscribeSession, touchActivity, updateSession, type Session } from './session';
 
 interface SessionContextValue {
   session: Session | null;
@@ -64,6 +64,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         userId: r.user_id,
         workspaceId: r.memberships[0]?.workspace_id ?? null,
         impersonating: null,
+        lastActiveAt: Date.now(),
       });
     },
     [qc],
@@ -75,6 +76,32 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     qc.clear();
     setAppState({ readOnly: false, suspended: false });
   }, [qc]);
+
+  // Idle sign-out: record activity; on return to the tab, sign out after 24h idle.
+  const signedIn = Boolean(session);
+  useEffect(() => {
+    if (!signedIn) return;
+    const check = () => {
+      if (isIdleExpired(getSession())) signOut();
+    };
+    check();
+    const onActivity = () => touchActivity();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        check();
+        touchActivity();
+      }
+    };
+    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'] as const;
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(check, 5 * 60_000);
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, onActivity));
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(timer);
+    };
+  }, [signedIn, signOut]);
 
   const switchWorkspace = useCallback(
     (id: string) => {
