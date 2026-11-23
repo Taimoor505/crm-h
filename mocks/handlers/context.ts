@@ -20,12 +20,32 @@ export async function latency() {
   await delay(120 + Math.random() * 180);
 }
 
-export function userFromRequest(req: Request): MUser | null {
+/** The person who holds the token, ignoring "Sign in as". */
+export function tokenUser(req: Request): MUser | null {
   const h = req.headers.get('authorization') ?? '';
   const token = /^Bearer\s+(.+)$/i.exec(h)?.[1] ?? '';
   const id = token.startsWith('mock.') ? token.slice(5) : null;
   if (!id) return null;
   return getDb().users.find((u) => u.id === id) ?? null;
+}
+
+/** Mirrors server/core/sign-in-as.ts, in memory (a page reload ends them). */
+export const mockSignInAs = new Map<string, { ownerId: string; userId: string; workspaceId: string; expiresAt: string }>();
+
+/** The open "Sign in as" session this request carries, if it is valid for the token holder. */
+export function signInAsOf(req: Request) {
+  const id = req.headers.get('x-sign-in-as');
+  const owner = tokenUser(req);
+  const s = id ? mockSignInAs.get(id) : undefined;
+  if (!s || !owner || s.ownerId !== owner.id || s.workspaceId !== req.headers.get('x-workspace-id') || Date.parse(s.expiresAt) <= Date.now()) return null;
+  return { id: id!, ...s };
+}
+
+/** Who the request acts as: the teammate during "Sign in as", else the token holder. */
+export function userFromRequest(req: Request): MUser | null {
+  const s = signInAsOf(req);
+  if (s) return getDb().users.find((u) => u.id === s.userId) ?? null;
+  return tokenUser(req);
 }
 
 /**

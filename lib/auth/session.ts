@@ -13,9 +13,26 @@ export interface Session {
   workspaceId: string | null;
   /** Set while a partner admin is viewing a client workspace. */
   impersonating: { workspaceId: string; workspaceName: string; returnTo: string | null } | null;
+  /**
+   * Set while an owner is signed in as a teammate ("Sign in as"). The owner's
+   * own token stays above; requests to this workspace carry the session id.
+   */
+  signInAs?: SignInAs | null;
   /** epoch ms of the last tap, key press or request; drives the idle sign-out. */
   lastActiveAt?: number | null;
 }
+
+export interface SignInAs {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  name: string;
+  role: 'manager' | 'agent';
+  /** ISO time the server ends it. */
+  expiresAt: string;
+}
+
+export const SIGN_IN_AS_HEADER = 'x-sign-in-as';
 
 /** Signed out after this long with no activity. Active people stay signed in (tokens refresh). */
 export const IDLE_LIMIT_MS = 24 * 3600_000;
@@ -96,6 +113,12 @@ export function subscribeSession(l: Listener): () => void {
     listeners.delete(l);
     window.removeEventListener('storage', onStorage);
   };
+}
+
+/** The "Sign in as" session id to send with a request to this workspace, if any. */
+export function signInAsFor(workspaceId: string | null): string | null {
+  const s = getSession()?.signInAs;
+  return s && workspaceId && s.workspaceId === workspaceId ? s.id : null;
 }
 
 /** The workspace requests are scoped to (impersonated or own). */

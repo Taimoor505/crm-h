@@ -19,7 +19,7 @@ type Filter = 'mine' | 'unassigned' | 'all';
 /** Conversation list with unread counts and the assigned agent (brief §8.7). */
 export function InboxList({ activeId }: { activeId?: string }) {
   const t = useTranslations('inbox');
-  const { session } = useSession();
+  const { userId } = useSession();
   const { can } = usePermissions();
   const names = useMemberNames();
   const q = useConversations();
@@ -27,7 +27,7 @@ export function InboxList({ activeId }: { activeId?: string }) {
   const [filter, setFilter] = useState<Filter>(manager ? 'all' : 'mine');
 
   // The API has no filter yet, so Mine/Unassigned are applied here.
-  const list = (q.data ?? []).filter((c) => (filter === 'mine' ? c.assigned_to === session?.userId : filter === 'unassigned' ? !c.assigned_to : true));
+  const list = (q.data ?? []).filter((c) => (filter === 'mine' ? c.assigned_to === userId : filter === 'unassigned' ? !c.assigned_to : true));
 
   return (
     <div className="flex h-full flex-col">

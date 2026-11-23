@@ -130,7 +130,7 @@ function TaskItem({ task, showAssignee }: { task: Task; showAssignee: boolean })
   const co = useTranslations('callOutcome');
   const tt = useTranslations('taskTypes');
   const s = useWorkspaceSettings();
-  const { session } = useSession();
+  const { userId } = useSession();
   const names = useMemberNames();
   const { canWrite } = usePermissions();
   const update = useUpdateTask();
@@ -159,7 +159,7 @@ function TaskItem({ task, showAssignee }: { task: Task; showAssignee: boolean })
           )}
           <p className={cn('mt-0.5 text-xs', task.is_overdue ? 'font-semibold text-red-700' : 'text-gray-600')}>
             {task.is_overdue ? <RelativeTime iso={task.due_at} /> : <span className="tabular-nums">{formatDateTime(task.due_at, s)}</span>}
-            {showAssignee && task.assigned_to !== session?.userId && names(task.assigned_to) && <span className="text-gray-500"> · {t('assignedTo', { name: names(task.assigned_to)! })}</span>}
+            {showAssignee && task.assigned_to !== userId && names(task.assigned_to) && <span className="text-gray-500"> · {t('assignedTo', { name: names(task.assigned_to)! })}</span>}
           </p>
         </div>
         <div className="flex shrink-0 gap-1.5">

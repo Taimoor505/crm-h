@@ -2,7 +2,7 @@
  * The one place that talks HTTP to /api/v1. Adds the session token and the
  * active workspace, and turns both backend error shapes into ApiError.
  */
-import { activeWorkspaceId, clearSession, getSession, isIdleExpired, touchActivity, updateSession } from '@/lib/auth/session';
+import { activeWorkspaceId, clearSession, getSession, isIdleExpired, SIGN_IN_AS_HEADER, signInAsFor, touchActivity, updateSession } from '@/lib/auth/session';
 
 export class ApiError extends Error {
   constructor(
@@ -141,6 +141,8 @@ export async function request<T>(path: string, opts: RequestOptions = {}, retrie
   if (!opts.anonymous && session?.accessToken) headers.authorization = `Bearer ${session.accessToken}`;
   const ws = opts.workspaceId === false ? null : opts.workspaceId ?? activeWorkspaceId();
   if (ws) headers['x-workspace-id'] = ws;
+  const signInAs = opts.anonymous ? null : signInAsFor(ws);
+  if (signInAs) headers[SIGN_IN_AS_HEADER] = signInAs;
   if (opts.partnerId) headers['x-partner-id'] = opts.partnerId;
 
   let body: BodyInit | undefined;
@@ -178,6 +180,8 @@ export async function request<T>(path: string, opts: RequestOptions = {}, retrie
   }
   if (!res.ok) {
     const err = toApiError(res.status, parsed);
+    // The server ended "Sign in as" (2 hours, or the teammate was removed): back to the owner's own view.
+    if (err.code === 'sign_in_as_ended' && signInAs && getSession()?.signInAs?.id === signInAs) updateSession({ signInAs: null });
     errorListeners.forEach((l) => l(err));
     throw err;
   }

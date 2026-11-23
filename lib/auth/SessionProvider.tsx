@@ -1,8 +1,9 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMe, revokeSession, type VerifyResult } from '@/lib/api/endpoints/auth';
+import { endSignInAs, startSignInAs } from '@/lib/api/endpoints/crm';
 import type { Me, Role, Workspace } from '@/lib/api/types';
 import { qk } from '@/hooks/queries/keys';
 import { setAppState } from '@/lib/app-state';
@@ -12,6 +13,8 @@ interface SessionContextValue {
   session: Session | null;
   /** Ready once the session has been read from storage on the client. */
   hydrated: boolean;
+  /** Who the app acts as: the teammate during "Sign in as", else the signed-in user. */
+  userId: string | null;
   me: Me | null;
   meLoading: boolean;
   meError: unknown;
@@ -23,6 +26,10 @@ interface SessionContextValue {
   switchWorkspace: (id: string) => void;
   impersonate: (ws: { id: string; name: string }, returnTo?: string) => void;
   exitImpersonation: () => string | null;
+  /** Owners: work as a manager or agent of the active workspace. */
+  signInAs: (userId: string) => Promise<void>;
+  /** End "Sign in as" and go back to the owner's own view. */
+  returnToMyAccount: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -36,13 +43,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const hydrated = session !== undefined;
   const workspaceId = session?.impersonating?.workspaceId ?? session?.workspaceId ?? null;
 
+  const signInAsId = session?.signInAs?.id ?? null;
   const meQuery = useQuery({
-    queryKey: qk.me(workspaceId),
+    queryKey: [...qk.me(workspaceId), signInAsId],
     queryFn: () => getMe(workspaceId),
     enabled: Boolean(session?.accessToken),
     staleTime: 5 * 60_000,
   });
   const me = meQuery.data ?? null;
+
+  // Starting or ending "Sign in as" changes who every query is for: drop all cached data.
+  const lastSignInAs = useRef(signInAsId);
+  useEffect(() => {
+    if (lastSignInAs.current === signInAsId) return;
+    lastSignInAs.current = signInAsId;
+    qc.clear();
+  }, [signInAsId, qc]);
+
+  // The server no longer knows the session (ended elsewhere, or a mock reload): drop it.
+  useEffect(() => {
+    if (signInAsId && me && !meQuery.isFetching && me.signedInAs?.id !== signInAsId) updateSession({ signInAs: null });
+  }, [signInAsId, me, meQuery.isFetching]);
 
   // Adopt the workspace /me resolved when the session had none yet.
   useEffect(() => {
@@ -64,6 +85,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         userId: r.user_id,
         workspaceId: r.memberships[0]?.workspace_id ?? null,
         impersonating: null,
+        signInAs: null,
         lastActiveAt: Date.now(),
       });
     },
@@ -71,7 +93,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(() => {
-    revokeSession(getSession()?.accessToken);
+    const s = getSession();
+    if (s?.signInAs) void endSignInAs(s.signInAs.workspaceId).catch(() => undefined);
+    revokeSession(s?.accessToken);
     clearSession();
     qc.clear();
     setAppState({ readOnly: false, suspended: false });
@@ -105,7 +129,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const switchWorkspace = useCallback(
     (id: string) => {
-      updateSession({ workspaceId: id, impersonating: null });
+      const s = getSession();
+      if (s?.signInAs) void endSignInAs(s.signInAs.workspaceId).catch(() => undefined);
+      updateSession({ workspaceId: id, impersonating: null, signInAs: null });
       setAppState({ readOnly: false, suspended: false });
     },
     [],
@@ -122,10 +148,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return returnTo;
   }, []);
 
+  const signInAs = useCallback(
+    async (userId: string) => {
+      if (!workspaceId) return;
+      const s = await startSignInAs(workspaceId, userId);
+      updateSession({ signInAs: s });
+    },
+    [workspaceId],
+  );
+
+  const returnToMyAccount = useCallback(async () => {
+    const s = getSession()?.signInAs;
+    if (!s) return;
+    try {
+      await endSignInAs(s.workspaceId);
+    } finally {
+      // Leave locally even if the call failed; the server also ends it after 2 hours.
+      updateSession({ signInAs: null });
+    }
+  }, []);
+
   const value = useMemo<SessionContextValue>(
     () => ({
       session: session ?? null,
       hydrated,
+      userId: me?.user.id ?? session?.signInAs?.userId ?? session?.userId ?? null,
       me,
       meLoading: meQuery.isLoading,
       meError: meQuery.error,
@@ -137,8 +184,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       switchWorkspace,
       impersonate,
       exitImpersonation,
+      signInAs,
+      returnToMyAccount,
     }),
-    [session, hydrated, me, meQuery.isLoading, meQuery.error, workspaceId, signIn, signOut, switchWorkspace, impersonate, exitImpersonation],
+    [session, hydrated, me, meQuery.isLoading, meQuery.error, workspaceId, signIn, signOut, switchWorkspace, impersonate, exitImpersonation, signInAs, returnToMyAccount],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

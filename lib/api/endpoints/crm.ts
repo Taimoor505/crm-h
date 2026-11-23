@@ -3,6 +3,7 @@ import {
   adaptActivity, adaptContact, adaptDeal, adaptField, adaptMember, adaptPipeline, adaptStage, type Raw,
 } from '../adapters';
 import { toMinor } from '@/lib/format';
+import type { SignInAs } from '@/lib/auth/session';
 import type {
   Activity, CallOutcome, Contact, ContactSummary, CustomFieldDef, CustomFieldType, Deal, DuplicateCheck, Page, Pipeline,
   ReasonPresets, Stage, StageKind, TeamMember, WorkspaceRole,
@@ -283,6 +284,17 @@ export async function invite(input: { name: string; phone?: string; email?: stri
 export async function updateMembership(id: string, patch: { role?: WorkspaceRole; status?: 'active' | 'suspended' }) {
   const r = await api.patch<Raw>(`/memberships/${id}`, patch);
   return r.membership as Raw;
+}
+
+/** "Sign in as" (owners): start working as a manager or agent of this workspace. */
+export async function startSignInAs(workspaceId: string, userId: string): Promise<SignInAs> {
+  const r = (await api.post<Raw>(`/workspaces/${workspaceId}/sign-in-as`, { user_id: userId }, { workspaceId })).sign_in_as;
+  return { id: r.id, workspaceId, userId: r.user.id, name: r.user.name || r.user.email || '', role: r.user.role, expiresAt: r.expires_at };
+}
+
+/** "Return to my account". The server runs this as the owner even with the header attached. */
+export async function endSignInAs(workspaceId: string) {
+  await api.delete(`/workspaces/${workspaceId}/sign-in-as`, undefined, { workspaceId });
 }
 
 export async function getContactSummary(id: string): Promise<ContactSummary> {

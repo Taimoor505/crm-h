@@ -8,7 +8,7 @@ const schema = z.object({
 });
 
 // PATCH /memberships/:id (owner/manager): change role or suspend/reactivate.
-export const PATCH = userRoute<{ id: string }>({ managerOnly: true }, async ({ req, params, tx, workspace, userId }) => {
+export const PATCH = userRoute<{ id: string }>({ managerOnly: true, blockSignInAs: true }, async ({ req, params, tx, workspace, userId }) => {
   const b = await readJson(req, schema);
   await elevate(tx);
   const [m] = await tx<{ id: string; user_id: string; role: string; status: string }[]>`

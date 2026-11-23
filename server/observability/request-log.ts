@@ -13,12 +13,13 @@ interface ReqCtx {
   requestId: string;
   userId?: string;
   workspaceId?: string;
+  signedInAsBy?: string;
 }
 
 const als = new AsyncLocalStorage<ReqCtx>();
 
 /** Adds the caller to the current request's log row (no-op outside a logged request). */
-export function tagRequest(p: { userId?: string; workspaceId?: string }) {
+export function tagRequest(p: { userId?: string; workspaceId?: string; signedInAsBy?: string }) {
   const c = als.getStore();
   if (c) Object.assign(c, p);
 }
@@ -32,6 +33,8 @@ export interface LogEntry {
   duration_ms: number;
   user_id: string | null;
   workspace_id: string | null;
+  /** The owner really acting during "Sign in as" (user_id is the teammate). */
+  signed_in_as_by: string | null;
   error_code: string | null;
   ip: string | null;
   user_agent: string | null;
@@ -130,6 +133,7 @@ export function logged<R extends Request, A extends unknown[]>(
             duration_ms: duration,
             user_id: ctx.userId ?? null,
             workspace_id: ctx.workspaceId ?? null,
+            signed_in_as_by: ctx.signedInAsBy ?? null,
             ip: maskIp(req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip')),
             user_agent: req.headers.get('user-agent')?.slice(0, 200) ?? null,
             region: process.env.VERCEL_REGION ?? null,

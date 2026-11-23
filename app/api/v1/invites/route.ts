@@ -15,7 +15,7 @@ const schema = z.object({
  * Supabase invite email with a link to set their password; people who
  * already have an account are added straight away.
  */
-export const POST = userRoute({ managerOnly: true }, async ({ req, tx, workspace, userId }) => {
+export const POST = userRoute({ managerOnly: true, blockSignInAs: true }, async ({ req, tx, workspace, userId }) => {
   const b = await readJson(req, schema);
   if (b.role === 'owner' && workspace.role !== 'owner') throw new ApiError(403, 'forbidden', 'Only owners can add another owner');
   await elevate(tx);

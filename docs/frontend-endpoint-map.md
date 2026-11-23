@@ -45,6 +45,7 @@ What every screen in `docs/CRM_BRIEF.md` (section 8) calls, the state of each en
 | Templates | `/system/inspector` → `industry_templates` | GET | — | templates with pipelines and fields | Sandbox | Missing as a public endpoint; using `GET /templates` (mock) |
 | Create workspace | `/workspaces` | POST | `name, template_key, seed_samples` (+ region, mocked) | `workspace` | Sandbox | Needs change (region #1, `agency` template #4) |
 | Invite team | `/invites` | POST | `phone/email, name, role` | `membership` | Sandbox | Ready |
+| Sign in as (owners) | `/workspaces/{id}/sign-in-as` | POST / DELETE | `user_id` | `sign_in_as { id, expires_at, user }`; send `id` as `x-sign-in-as` on later requests | Postgres | Ready |
 | Clear sample data | — | — | — | — | — | Missing (`POST /workspaces/{id}/clear-samples`) |
 
 ### Home (8.2)
