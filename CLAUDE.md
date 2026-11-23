@@ -8,7 +8,6 @@ Current endpoint status and deviations: docs/frontend-endpoint-map.md.
 ## Repo rules
 - Next.js 15 App Router, React 19, TypeScript strict, Tailwind v4 (NO tailwind.config: tokens live in app/globals.css @theme).
 - Do NOT modify app/api/**, server/**, worker/**, supabase/**, lib/taimoor/** or tests/** unless explicitly asked. If the frontend needs a backend change, write it to docs/frontend-backend-requests.md instead.
-- Keep the developer workbench working; it lives at /dev/workbench (development or super-admin only).
 - The repo has no src/ folder. Put new code in: app/(auth), app/(app), app/partner, app/dev, components/ui (shadcn), components/crm, components/layout, lib/api, lib/format, lib/phone, lib/theme, lib/permissions, lib/auth, hooks, messages/en.json.
 - Already installed: motion, lucide-react. Fonts: Plus Jakarta Sans (headings) and DM Sans (body) via next/font. Don't add other UI or icon libraries.
 
@@ -27,7 +26,7 @@ Current endpoint status and deviations: docs/frontend-endpoint-map.md.
 
 ## API rules
 - Components never call fetch. Use the endpoint functions in lib/api and the TanStack Query hooks in hooks/queries (query keys in hooks/queries/keys.ts). Optimistic updates for: move deal, complete task, add note, assign.
-- Every request goes through the session module in lib/auth. Sandbox tokens (taimoor_tok_*, x-sandbox-user-id) are allowed ONLY in development, behind lib/auth/dev-session.ts.
+- Every request goes through the session module in lib/auth. Mock tokens (mock.*) are allowed ONLY in development with the API fully mocked, behind lib/auth/dev-session.ts.
 - Global errors: 401 → /login; 403 workspace_read_only → read-only banner and hide write actions; 403 workspace_suspended → /suspended.
 - If an endpoint does not exist, add an MSW handler in mocks/ marked TODO, and add it to docs/frontend-endpoint-map.md under "Missing".
 

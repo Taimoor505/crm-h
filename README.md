@@ -50,7 +50,6 @@ Any other number goes through onboarding. In development, the bug button in the 
 
 | Path | What's there |
 |---|---|
-| `/dev/workbench` | The original developer workbench |
 | `/dev/tokens` | Design tokens and formatting for the four test workspaces |
 
 QA status is in [`docs/frontend-qa.md`](docs/frontend-qa.md), and the changes the frontend needs from the backend are in [`docs/frontend-backend-requests.md`](docs/frontend-backend-requests.md).

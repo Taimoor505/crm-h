@@ -178,6 +178,34 @@ export interface paths {
         patch: operations["memberships-patch"];
         trace?: never;
     };
+    "/workspaces/{id}/sign-in-as": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Owner signs in as a manager or agent; send the returned id as x-sign-in-as (2 hours)
+         * @description Owner signs in as a manager or agent; send the returned id as x-sign-in-as (2 hours)
+         *
+         *     **RLS / Security:** Active owners only; target must be an active non-owner member. Writes audit_logs. Activities record meta.signed_in_as_by.
+         */
+        post: operations["sign-in-as-post"];
+        /**
+         * Return to your own account (ends the open sign-in-as session)
+         * @description Return to your own account (ends the open sign-in-as session)
+         *
+         *     **RLS / Security:** Runs as the real owner even while x-sign-in-as is sent. Writes audit_logs.
+         */
+        delete: operations["sign-in-as-delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/contacts": {
         parameters: {
             query?: never;
@@ -980,6 +1008,89 @@ export interface operations {
                 "application/json": Record<string, never>;
             };
         };
+        responses: {
+            /** @description Successful JSON response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description RLS / Role Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "sign-in-as-post": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Active tenant workspace scope */
+                "X-Workspace-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "user_id": "00000000-0000-0000-0000-000000000000"
+                 *     }
+                 */
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Successful JSON response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description RLS / Role Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "sign-in-as-delete": {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Active tenant workspace scope */
+                "X-Workspace-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful JSON response */
             200: {

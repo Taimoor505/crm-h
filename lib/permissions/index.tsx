@@ -30,9 +30,9 @@ export const PERMISSIONS = {
   'settings.calendar': ['owner', 'manager', 'agent', 'partner_admin', 'super_admin'],
   'settings.branding': ['owner', 'partner_admin', 'super_admin'],
   'settings.billing': ['owner'],
+  'team.sign_in_as': ['owner'],
   'partner.area': ['partner_admin'],
   'admin.console': ['super_admin'],
-  'dev.workbench': ['super_admin'],
   'dev.logs': ['super_admin'],
 } as const satisfies Record<string, readonly Role[]>;
 

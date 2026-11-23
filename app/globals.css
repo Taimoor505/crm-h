@@ -160,12 +160,6 @@
   }
 }
 
-/* Kept for the developer workbench. */
-.font-urdu {
-  font-family: var(--font-urdu), var(--font-body), system-ui, sans-serif;
-  line-height: 1.75;
-}
-
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }

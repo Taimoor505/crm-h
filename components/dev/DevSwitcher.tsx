@@ -9,7 +9,6 @@ import { isDevToolsEnabled } from '@/lib/dev-tools';
 import { mockMode } from '@/mocks/mode';
 import { devSignInAs } from '@/lib/auth/dev-session';
 import { useSession } from '@/lib/auth/SessionProvider';
-import { api } from '@/lib/api/client';
 import { setAppState } from '@/lib/app-state';
 
 interface Actor {
@@ -38,24 +37,17 @@ function Panel() {
   const [status, setStatus] = useState('active');
 
   useEffect(() => {
-    if (!open) return;
-    if (mode === 'all') {
-      import('@/mocks/db').then(({ getDb }) => {
-        const db = getDb();
-        setActors(
-          db.users.map((u) => {
-            const roles = db.memberships.filter((m) => m.user_id === u.id).map((m) => `${m.role}@${db.workspaces.find((w) => w.id === m.workspace_id)?.name}`);
-            return { id: u.id, name: u.name, hint: u.is_super_admin ? 'super_admin' : u.partner_admin_of ? 'partner_admin' : roles.join(', ') };
-          }),
-        );
-        setStatus(db.workspaces.find((w) => w.id === workspaceId)?.status ?? 'active');
-      });
-    } else {
-      api
-        .get<{ users: { id: string; name: string }[] }>('/system/inspector')
-        .then((r) => setActors(r.users.map((u) => ({ id: u.id, name: u.name, hint: '' }))))
-        .catch(() => setActors([]));
-    }
+    if (!open || mode !== 'all') return;
+    import('@/mocks/db').then(({ getDb }) => {
+      const db = getDb();
+      setActors(
+        db.users.map((u) => {
+          const roles = db.memberships.filter((m) => m.user_id === u.id).map((m) => `${m.role}@${db.workspaces.find((w) => w.id === m.workspace_id)?.name}`);
+          return { id: u.id, name: u.name, hint: u.is_super_admin ? 'super_admin' : u.partner_admin_of ? 'partner_admin' : roles.join(', ') };
+        }),
+      );
+      setStatus(db.workspaces.find((w) => w.id === workspaceId)?.status ?? 'active');
+    });
   }, [open, mode, workspaceId]);
 
   async function setWorkspaceStatus(next: string) {
@@ -88,24 +80,26 @@ function Panel() {
             </button>
           </div>
           <p className="mb-2 text-gray-500">{t('mockMode', { mode })}</p>
-          <label className="mb-2 block">
-            <span className="mb-1 block font-medium">{t('actor')}</span>
-            <select
-              className="h-9 w-full rounded border px-2"
-              value={session?.userId ?? ''}
-              onChange={(e) => {
-                qc.clear();
-                devSignInAs(e.target.value, null);
-                router.replace('/home');
-              }}
-            >
-              {actors.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} {a.hint && `(${a.hint})`}
-                </option>
-              ))}
-            </select>
-          </label>
+          {mode === 'all' && (
+            <label className="mb-2 block">
+              <span className="mb-1 block font-medium">{t('actor')}</span>
+              <select
+                className="h-9 w-full rounded border px-2"
+                value={session?.userId ?? ''}
+                onChange={(e) => {
+                  qc.clear();
+                  devSignInAs(e.target.value, null);
+                  router.replace('/home');
+                }}
+              >
+                {actors.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} {a.hint && `(${a.hint})`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {(me?.memberships.length ?? 0) > 0 && (
             <label className="mb-2 block">
               <span className="mb-1 block font-medium">{t('workspace')}</span>

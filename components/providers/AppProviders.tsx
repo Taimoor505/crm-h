@@ -14,8 +14,6 @@ import { setAppState } from '@/lib/app-state';
 
 /**
  * Query client, API mocks (docs/frontend-endpoint-map.md), session and toasts.
- * Used by every route group except the developer workbench, so the workbench
- * always talks to the real backend.
  */
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const router = useRouter();

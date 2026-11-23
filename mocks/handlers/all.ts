@@ -12,7 +12,7 @@ import {
 } from '../db';
 import { TEMPLATES } from '../data/templates';
 import { AUTOMATION_CATALOG, NOTIFICATION_TYPES } from './catalog';
-import { BASE, authorize, body, dayBounds, fail, isResponse, latency, localDay, nowIso, paginate, query, userFromRequest, type Ctx } from './context';
+import { BASE, authorize, body, dayBounds, fail, isResponse, latency, localDay, mockSignInAs, nowIso, paginate, query, signInAsOf, tokenUser, userFromRequest, type Ctx } from './context';
 
 const json = HttpResponse.json;
 
@@ -176,11 +176,16 @@ export const allHandlers = [
     if (wsId && !ws) return json({ error: 'RLS Forbidden: not a member of this workspace' }, { status: 403 });
     const m = ws ? mems.find((x) => x.workspace_id === ws!.id) : null;
     const role = m?.role ?? (ws && user.partner_admin_of === ws.partner_id ? 'partner_admin' : user.is_super_admin ? 'owner' : 'agent');
+    const s = signInAsOf(request);
+    const by = s ? db.users.find((u) => u.id === s.ownerId) : null;
     return json({
-      user,
+      user: s ? { ...user, is_super_admin: false } : user,
       active_workspace: ws ? { ...ws, region: undefined } : null,
       effective_role: role,
-      memberships: mems.map((x) => ({ ...x, workspace_name: db.workspaces.find((w) => w.id === x.workspace_id)?.name ?? null, template_key: db.workspaces.find((w) => w.id === x.workspace_id)?.template_key ?? null })),
+      memberships: mems
+        .filter((x) => !s || x.workspace_id === s.workspaceId)
+        .map((x) => ({ ...x, workspace_name: db.workspaces.find((w) => w.id === x.workspace_id)?.name ?? null, template_key: db.workspaces.find((w) => w.id === x.workspace_id)?.template_key ?? null })),
+      signed_in_as: s && by ? { id: s.id, expires_at: s.expiresAt, by: { id: by.id, name: by.name, email: by.email } } : null,
     });
   }),
 
@@ -279,6 +284,35 @@ export const allHandlers = [
       }),
     }),
   )),
+
+  http.post(`${BASE}/workspaces/:id/sign-in-as`, withAuth({}, async (ctx, req, _p, db) => {
+    if (signInAsOf(req)) return fail(403, 'not_allowed_while_signed_in_as', 'Return to your own account to do this');
+    if (ctx.membership?.role !== 'owner') return fail(403, 'forbidden', 'Only workspace owners can sign in as a teammate');
+    const b = await body<{ user_id?: string }>(req);
+    const target = db.memberships.find((m) => m.workspace_id === ctx.ws.id && m.user_id === b.user_id && m.status === 'active');
+    if (!target || target.user_id === ctx.user.id) return fail(404, 'not_found', 'This person is not an active member of the workspace');
+    if (target.role === 'owner') return fail(403, 'forbidden', 'You can’t sign in as another owner');
+    for (const [k, v] of mockSignInAs) if (v.ownerId === ctx.user.id && v.workspaceId === ctx.ws.id) mockSignInAs.delete(k);
+    const id = uid();
+    const expiresAt = new Date(Date.now() + 2 * 3600_000).toISOString();
+    mockSignInAs.set(id, { ownerId: ctx.user.id, userId: target.user_id, workspaceId: ctx.ws.id, expiresAt });
+    const u = db.users.find((x) => x.id === target.user_id);
+    return json({ sign_in_as: { id, expires_at: expiresAt, user: { id: target.user_id, name: u?.name ?? '', email: u?.email ?? null, role: target.role } } }, { status: 201 });
+  })),
+
+  http.delete(`${BASE}/workspaces/:id/sign-in-as`, async ({ request, params }) => {
+    await latency();
+    const owner = tokenUser(request);
+    if (!owner) return fail(401, 'unauthorized', 'Missing Authorization: Bearer token');
+    let ended = false;
+    for (const [k, v] of mockSignInAs) {
+      if (v.ownerId === owner.id && v.workspaceId === params.id) {
+        mockSignInAs.delete(k);
+        ended = true;
+      }
+    }
+    return json({ ended });
+  }),
 
   http.post(`${BASE}/invites`, withAuth({ managerOnly: true }, async (ctx, req, _p, db) => {
     const b = await body<{ name?: string; phone?: string; email?: string; role?: string }>(req);

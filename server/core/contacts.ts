@@ -1,9 +1,7 @@
-// Postgres implementation of the two contact-service calls lead capture needs,
-// written against Taimoor's schema (001_core_schema.sql). Taimoor's own routes
-// still run on his sandbox store (lib/taimoor/store.ts); when they move to
-// Postgres, these should become calls into his service. Behaviour to keep:
-// dedupe on (workspace_id, phone_e164) among live contacts, emit
-// contact.created exactly once, write activities for the timeline.
+// Contact service shared by lead capture, imports and the contacts routes,
+// on the core schema (001_core_schema.sql). Behaviour to keep: dedupe on
+// (workspace_id, phone_e164) among live contacts, emit contact.created
+// exactly once, write activities for the timeline.
 import { jsonb, type Db } from '../db';
 import { enqueue } from '../queue';
 

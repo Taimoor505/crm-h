@@ -62,6 +62,9 @@ export async function getMe(workspaceId: string | null): Promise<Me> {
     workspace: r.active_workspace ? adaptWorkspace(r.active_workspace) : null,
     role,
     memberships: (r.memberships ?? []).map(adaptMembership),
+    signedInAs: r.signed_in_as
+      ? { id: r.signed_in_as.id, expiresAt: r.signed_in_as.expires_at, by: { id: r.signed_in_as.by.id, name: r.signed_in_as.by.name || r.signed_in_as.by.email || '' } }
+      : null,
   };
 }
 

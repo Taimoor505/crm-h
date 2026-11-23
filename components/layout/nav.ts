@@ -1,8 +1,8 @@
-import { BarChart3, Bell, CalendarCheck, Code2, Columns3, Home, Inbox, Settings, Shield, Building2, Users } from 'lucide-react';
+import { BarChart3, Bell, CalendarCheck, Columns3, Home, Inbox, Settings, Shield, Building2, Users } from 'lucide-react';
 import type { ModuleKey } from '@/lib/api/types';
 import type { Permission } from '@/lib/permissions';
 
-export type NavKey = 'home' | 'leads' | 'pipeline' | 'followUps' | 'inbox' | 'reports' | 'notifications' | 'settings' | 'partner' | 'admin' | 'workbench';
+export type NavKey = 'home' | 'leads' | 'pipeline' | 'followUps' | 'inbox' | 'reports' | 'notifications' | 'settings' | 'partner' | 'admin';
 
 export interface NavItem {
   key: NavKey;
@@ -27,7 +27,6 @@ export const NAV: NavItem[] = [
   { key: 'settings', href: '/settings', icon: Settings, permission: 'settings.view' },
   { key: 'partner', href: '/partner', icon: Building2, permission: 'partner.area' },
   { key: 'admin', href: '/admin', icon: Shield, permission: 'admin.console' },
-  { key: 'workbench', href: '/dev/workbench', icon: Code2, permission: 'dev.workbench' },
 ];
 
 /** Which module a path belongs to, for hide_modules redirects. */

@@ -76,7 +76,6 @@
     "settings": "Settings",
     "partner": "Partner",
     "admin": "Admin",
-    "workbench": "Workbench",
     "more": "More",
     "mainNav": "Main navigation"
   },
@@ -92,6 +91,8 @@
     "addLead": "Add lead",
     "viewingAs": "Viewing as {workspace}",
     "exitImpersonation": "Exit",
+    "signedInAs": "You're signed in as {name} ({role}). What you do here is recorded as done by you.",
+    "returnToMyAccount": "Return to my account",
     "offlineBanner": "You're offline. Changes will fail until you reconnect.",
     "noResults": "No leads match “{query}”.",
     "searchHint": "Type at least 2 characters",
@@ -879,7 +880,11 @@
       "changeRole": "Change role for {name}",
       "deactivate": "Deactivate",
       "reactivate": "Reactivate",
-      "you": "You"
+      "you": "You",
+      "signInAs": "Sign in as",
+      "signInAsLabel": "Sign in as {name}",
+      "signedInAs": "You're now signed in as {name}",
+      "signInAsFailed": "Couldn't sign in as this teammate. Please try again."
     },
     "leadSources": {
       "add": "Add source",
@@ -1169,8 +1174,6 @@
   "admin": {
     "title": "Admin",
     "body": "Platform console for super-admins. Partners, workspaces, plans and system health arrive in Phase 2.",
-    "workbench": "Developer workbench",
-    "workbenchHint": "Test API endpoints, RLS and templates against the backend.",
     "partners": "Partners",
     "payments": "Payments to confirm",
     "logs": "API logs",

@@ -146,7 +146,7 @@ function prependActivity(qc: ReturnType<typeof useQueryClient>, key: readonly un
 /** Optimistic: the note appears in the timeline immediately. */
 export function useAddNote(contactId: string) {
   const ws = useWorkspaceId();
-  const { session } = useSession();
+  const { userId } = useSession();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: string) =>
@@ -155,7 +155,7 @@ export function useAddNote(contactId: string) {
       await qc.cancelQueries({ queryKey: qk.timeline(ws, contactId) });
       const prev = qc.getQueryData(qk.timeline(ws, contactId));
       prependActivity(qc, qk.timeline(ws, contactId), {
-        id: `optimistic-${Date.now()}`, contact_id: contactId, deal_id: null, type: 'note', actor_id: session?.userId ?? null, body, meta: { pending: true }, created_at: new Date().toISOString(),
+        id: `optimistic-${Date.now()}`, contact_id: contactId, deal_id: null, type: 'note', actor_id: userId, body, meta: { pending: true }, created_at: new Date().toISOString(),
       });
       return { prev };
     },

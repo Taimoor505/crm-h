@@ -1,5 +1,7 @@
 # Huzaifa's backend: lead capture to billing
 
+> **Out of date (2026-11-23):** the sandbox store (`lib/taimoor/store.ts`), the developer workbench (`/dev/workbench`) and the `/system/inspector` and `/rls/verify` routes have been removed. Every route now runs on Postgres with Supabase auth. Sections below that mention them describe the earlier state.
+
 Everything in the backend brief, weeks 1–12: lead capture (website form,
 webhooks, Meta lead ads, quick-add with voice note, WhatsApp inbound),
 assignment, tasks and follow-ups, notifications (in-app, web push, agent

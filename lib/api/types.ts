@@ -47,6 +47,8 @@ export interface Me {
   workspace: Workspace | null;
   role: Role;
   memberships: Membership[];
+  /** Set while an owner is signed in as this user ("Sign in as"). */
+  signedInAs: { id: string; expiresAt: string; by: { id: string; name: string } } | null;
 }
 
 // ------------------------------------------------------------- branding

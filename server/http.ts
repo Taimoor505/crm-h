@@ -2,6 +2,7 @@ import { z, ZodError } from 'zod';
 import { bearerToken, verifyAccessToken } from './auth';
 import { withService, withUser, type Tx } from './db';
 import { logged, tagRequest } from './observability/request-log';
+import { markSignedInAs, resolveSignInAs, signInAsEnded, signInAsHeader, type ActiveSignInAs } from './core/sign-in-as';
 
 export class ApiError extends Error {
   constructor(
@@ -68,6 +69,8 @@ export interface UserCtx<P> {
   userId: string;
   workspace: WorkspaceCtx;
   isManager: boolean;
+  /** Set while an owner is signed in as this user; userId is the teammate. */
+  signedInAs: ActiveSignInAs | null;
   tx: Tx;
 }
 
@@ -82,26 +85,34 @@ const uuid = z.uuid();
  *  - runs the handler in one transaction as that user (RLS enforced)
  *  - blocks writes when the workspace is read-only or archived (unpaid
  *    billing), and everything when it is suspended
+ *  - with x-sign-in-as (server/core/sign-in-as.ts), checks the owner's session
+ *    and runs as the teammate instead, unless the route opts out
  */
 export function userRoute<P = Record<string, string>>(
   opts: {
     managerOnly?: boolean;
     /** Personal actions (mark read, availability, settings) still work when unpaid. */
     allowWhenReadOnly?: boolean;
+    /** Refuse while an owner is signed in as someone (team management, starting another session). */
+    blockSignInAs?: boolean;
   },
   handler: (c: UserCtx<P>) => Promise<Response>,
 ): NextHandler<P> {
   return logged(async (req, ctx) => {
     try {
-      const { userId } = await verifyAccessToken(bearerToken(req));
-      tagRequest({ userId });
+      const { userId: realUserId } = await verifyAccessToken(bearerToken(req));
+      tagRequest({ userId: realUserId });
       const wsHeader = req.headers.get('x-workspace-id');
       const ws = uuid.safeParse(wsHeader);
       if (ws.success) tagRequest({ workspaceId: ws.data });
       if (!ws.success) throw new ApiError(400, 'workspace_required', 'X-Workspace-Id header (uuid) is required');
       const params = (await ctx?.params) ?? ({} as P);
 
+      const signedInAs = await signInAsFor(req, realUserId, ws.data, Boolean(opts.blockSignInAs));
+      const userId = signedInAs?.targetUserId ?? realUserId;
+
       return await withUser(userId, async (tx) => {
+        if (signedInAs) await markSignedInAs(tx, signedInAs.ownerId);
         // A member, or an admin of the workspace's partner (support access,
         // treated as a manager, the same as Taimoor's RLS helpers).
         const [m] = await tx<{ role: Role; timezone: string; status: string }[]>`
@@ -129,6 +140,7 @@ export function userRoute<P = Record<string, string>>(
           userId,
           workspace: { id: ws.data, role: m.role, timezone: m.timezone, status: m.status },
           isManager,
+          signedInAs,
           tx,
         });
       });
@@ -139,19 +151,49 @@ export function userRoute<P = Record<string, string>>(
 }
 
 /**
+ * Checks x-sign-in-as for a request. Null when the header isn't sent; throws
+ * when it is sent to a route that refuses it or the session isn't valid.
+ */
+async function signInAsFor(req: Request, realUserId: string, workspaceId: string | null, block: boolean): Promise<ActiveSignInAs | null> {
+  const sessionId = signInAsHeader(req);
+  if (!sessionId) return null;
+  if (block) {
+    throw new ApiError(403, 'not_allowed_while_signed_in_as', 'Return to your own account to do this');
+  }
+  if (!workspaceId) throw new ApiError(400, 'workspace_required', 'X-Workspace-Id header (uuid) is required');
+  const s = await withService((tx) => resolveSignInAs(tx, sessionId, realUserId, workspaceId));
+  if (!s) throw signInAsEnded();
+  tagRequest({ userId: s.targetUserId, signedInAsBy: realUserId });
+  return s;
+}
+
+/**
  * Wraps an endpoint that only needs a signed-in user (no workspace). The
  * handler gets a service-role transaction and must authorise the user itself
  * (billing and super-admin endpoints, whose tables have no RLS policies).
+ *
+ * "Sign in as" (x-sign-in-as) is refused here by default: billing, partner,
+ * workspace and account endpoints always act as the real person. `resolve`
+ * runs the handler as the teammate (GET /me); `ignore` runs it as the owner
+ * whatever the header says (ending the session).
  */
 export function authRoute<P = Record<string, string>>(
-  handler: (c: { req: Request; params: P; userId: string; tx: Tx }) => Promise<Response>,
+  handler: (c: { req: Request; params: P; userId: string; signedInAs: ActiveSignInAs | null; tx: Tx }) => Promise<Response>,
+  opts: { signInAs?: 'block' | 'resolve' | 'ignore' } = {},
 ): NextHandler<P> {
   return logged(async (req, ctx) => {
     try {
-      const { userId } = await verifyAccessToken(bearerToken(req));
-      tagRequest({ userId });
+      const { userId: realUserId } = await verifyAccessToken(bearerToken(req));
+      tagRequest({ userId: realUserId });
       const params = (await ctx?.params) ?? ({} as P);
-      return await withService((tx) => handler({ req, params, userId, tx }));
+      const mode = opts.signInAs ?? 'block';
+      let signedInAs: ActiveSignInAs | null = null;
+      if (mode !== 'ignore') {
+        const ws = req.headers.get('x-workspace-id');
+        signedInAs = await signInAsFor(req, realUserId, ws && uuid.safeParse(ws).success ? ws : null, mode === 'block');
+      }
+      const userId = signedInAs?.targetUserId ?? realUserId;
+      return await withService((tx) => handler({ req, params, userId, signedInAs, tx }));
     } catch (err) {
       return errorResponse(err);
     }

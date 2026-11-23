@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { UserPlus } from 'lucide-react';
+import { LogIn, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,11 +25,25 @@ export default function TeamSettingsPage() {
   const t = useTranslations('settings.team');
   const n = useTranslations('settings');
   const r = useTranslations('roles');
-  const { session, role } = useSession();
-  const { canWrite } = usePermissions();
+  const { userId, role, signInAs } = useSession();
+  const { canWrite, can } = usePermissions();
+  const router = useRouter();
   const members = useMembers();
   const m = useTeamMutations();
   const [inviting, setInviting] = useState(false);
+  const [signingInAs, setSigningInAs] = useState<string | null>(null);
+
+  async function startSignInAs(memberId: string, name: string) {
+    setSigningInAs(memberId);
+    try {
+      await signInAs(memberId);
+      toast.success(t('signedInAs', { name }));
+      router.replace('/home');
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : t('signInAsFailed'));
+      setSigningInAs(null);
+    }
+  }
   // Managers can't promote anyone to owner or change owners.
   const roles: WorkspaceRole[] = role === 'owner' || role === 'partner_admin' || role === 'super_admin' ? ['owner', 'manager', 'agent'] : ['manager', 'agent'];
 
@@ -52,7 +67,9 @@ export default function TeamSettingsPage() {
         ) : (
           <ul className="stagger divide-y divide-gray-100">
             {(members.data ?? []).map((mem) => {
-              const me = mem.user_id === session?.userId;
+              const me = mem.user_id === userId;
+              const name = mem.name || mem.email || mem.phone || '';
+              const canSignInAs = can('team.sign_in_as') && !me && mem.role !== 'owner' && mem.status === 'active';
               const editable = canWrite && !me && (mem.role !== 'owner' || roles.includes('owner'));
               return (
                 <li key={mem.membership_id} className="flex flex-wrap items-center gap-3 py-3">
@@ -68,6 +85,18 @@ export default function TeamSettingsPage() {
                       {mem.status === 'suspended' && <span className="ms-2 rounded-full bg-gray-100 px-2 py-0.5">{t('statusSuspended')}</span>}
                     </p>
                   </div>
+                  {canSignInAs && (
+                    <Button
+                      variant="outline"
+                      className="h-10"
+                      disabled={signingInAs !== null}
+                      aria-label={t('signInAsLabel', { name })}
+                      onClick={() => startSignInAs(mem.user_id, name)}
+                    >
+                      <LogIn className="size-4" aria-hidden="true" />
+                      {t('signInAs')}
+                    </Button>
+                  )}
                   {editable ? (
                     <div className="flex items-center gap-2">
                       <Select value={mem.role} onValueChange={(v) => m.update.mutate({ id: mem.membership_id, role: v as WorkspaceRole }, { onSuccess: () => toast.success(n('saved')) })}>

@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { NAV, isActive, moduleForPath, type NavItem } from './nav';
 import { NotificationBell } from './NotificationBell';
 import { GlobalSearch } from './GlobalSearch';
-import { ImpersonationBar, OfflineBanner, ReadOnlyBanner } from './Banners';
+import { ImpersonationBar, OfflineBanner, ReadOnlyBanner, SignInAsBar } from './Banners';
 
 function useNavItems(): NavItem[] {
   const { branding } = useBranding();
@@ -126,7 +126,7 @@ function UserMenu() {
   );
 }
 
-const SECONDARY = new Set(['notifications', 'settings', 'partner', 'admin', 'workbench']);
+const SECONDARY = new Set(['notifications', 'settings', 'partner', 'admin']);
 
 function Sidebar({ items }: { items: NavItem[] }) {
   const t = useTranslations('nav');
@@ -330,6 +330,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar items={items} />
       <div className="flex min-w-0 flex-1 flex-col">
         <ImpersonationBar />
+        <SignInAsBar />
         <ReadOnlyBanner />
         <OfflineBanner />
         <TopBar />
