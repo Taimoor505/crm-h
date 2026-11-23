@@ -126,7 +126,7 @@ function UserMenu() {
   );
 }
 
-const SECONDARY = new Set(['notifications', 'settings', 'partner', 'admin', 'workbench']);
+const SECONDARY = new Set(['notifications', 'settings', 'partner', 'admin']);
 
 function Sidebar({ items }: { items: NavItem[] }) {
   const t = useTranslations('nav');

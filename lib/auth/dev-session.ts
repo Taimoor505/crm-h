@@ -1,16 +1,16 @@
 /**
- * Development-only identities. Sandbox tokens (`taimoor_tok_*`) and the mock
- * backend's `mock.*` tokens must never be minted outside development: every
- * export is a no-op unless dev tools are enabled, so production code paths
- * can't reach them.
+ * Development-only identities for the mock backend (`mock.*` tokens). They
+ * must never be minted outside development: every export is a no-op unless dev
+ * tools are enabled and the API is fully mocked, so production code paths
+ * can't reach them. The real backend only accepts Supabase tokens.
  */
 import { isDevToolsEnabled } from '@/lib/dev-tools';
 import { mockMode } from '@/mocks/mode';
 import { setSession } from './session';
 
 export function devTokenFor(userId: string): string | null {
-  if (!isDevToolsEnabled()) return null;
-  return mockMode() === 'all' ? `mock.${userId}` : `taimoor_tok_${userId}`;
+  if (!isDevToolsEnabled() || mockMode() !== 'all') return null;
+  return `mock.${userId}`;
 }
 
 export function devSignInAs(userId: string, workspaceId: string | null) {

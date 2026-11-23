@@ -76,7 +76,6 @@
     "settings": "Settings",
     "partner": "Partner",
     "admin": "Admin",
-    "workbench": "Workbench",
     "more": "More",
     "mainNav": "Main navigation"
   },
@@ -1169,8 +1168,6 @@
   "admin": {
     "title": "Admin",
     "body": "Platform console for super-admins. Partners, workspaces, plans and system health arrive in Phase 2.",
-    "workbench": "Developer workbench",
-    "workbenchHint": "Test API endpoints, RLS and templates against the backend.",
     "partners": "Partners",
     "payments": "Payments to confirm",
     "logs": "API logs",

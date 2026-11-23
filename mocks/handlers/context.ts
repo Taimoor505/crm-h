@@ -23,7 +23,7 @@ export async function latency() {
 export function userFromRequest(req: Request): MUser | null {
   const h = req.headers.get('authorization') ?? '';
   const token = /^Bearer\s+(.+)$/i.exec(h)?.[1] ?? '';
-  const id = token.startsWith('mock.') ? token.slice(5) : token.startsWith('taimoor_tok_') ? token.slice(12) : req.headers.get('x-sandbox-user-id');
+  const id = token.startsWith('mock.') ? token.slice(5) : null;
   if (!id) return null;
   return getDb().users.find((u) => u.id === id) ?? null;
 }

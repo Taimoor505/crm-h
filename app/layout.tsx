@@ -3,7 +3,6 @@ import {
   Plus_Jakarta_Sans,
   DM_Sans,
   JetBrains_Mono,
-  Noto_Sans_Arabic,
   Inter,
   Manrope,
   Poppins,
@@ -31,14 +30,6 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
   variable: '--font-mono',
-});
-
-// Only the developer workbench uses it; kept so /dev/workbench renders as before.
-const notoUrdu = Noto_Sans_Arabic({
-  subsets: ['arabic'],
-  weight: ['400', '500', '600'],
-  variable: '--font-urdu',
-  preload: false,
 });
 
 // Brand font choices (Settings › Branding). Not preloaded: a browser only
@@ -74,7 +65,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={[plusJakarta, dmSans, jetbrainsMono, notoUrdu, inter, manrope, poppins, nunito, plex, outfit].map((f) => f.variable).join(" ")}
+      className={[plusJakarta, dmSans, jetbrainsMono, inter, manrope, poppins, nunito, plex, outfit].map((f) => f.variable).join(" ")}
     >
       <body suppressHydrationWarning className="min-h-dvh bg-background text-foreground antialiased">
         <NextIntlClientProvider locale="en" messages={messages}>

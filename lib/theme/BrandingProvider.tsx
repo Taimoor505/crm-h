@@ -33,8 +33,7 @@ function initialsFavicon(text: string, bg: string, fg: string) {
 
 /**
  * Loads branding (by workspace, or by hostname for partner domains), merges
- * workspace overrides, and writes the --brand-* variables on <html>. Uses the
- * variable names the workbench shell already sets.
+ * workspace overrides, and writes the --brand-* variables on <html>.
  */
 export function BrandingProvider({
   workspaceId,

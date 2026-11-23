@@ -1,5 +1,7 @@
 # Taimoor: how my backend plugs into yours
 
+> **Out of date (2026-11-23):** the sandbox store (`lib/taimoor/store.ts`), the developer workbench (`/dev/workbench`) and the `/system/inspector` and `/rls/verify` routes have been removed. Every route now runs on Postgres with Supabase auth. Sections below that mention them describe the earlier state.
+
 Hi Taimoor. My part (weeks 1–12 of my brief) is in
 [Hub-to-Hub/Crm#1](https://github.com/Hub-to-Hub/Crm/pull/1): lead capture, assignment,
 tasks, notifications, automations, reports and billing.

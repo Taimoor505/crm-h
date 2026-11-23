@@ -2,6 +2,8 @@
 
 What every screen in `docs/CRM_BRIEF.md` (section 8) calls, the state of each endpoint at commit `59002ff`, and what the backend still needs to deliver. Keep this file current: any MSW mock that is still in use must be listed under [Missing](#missing).
 
+> **Out of date (2026-11-23):** the sandbox store (`lib/taimoor/store.ts`), the developer workbench (`/dev/workbench`) and the `/system/inspector` and `/rls/verify` routes have been removed. Every route now runs on Postgres with Supabase auth. Sections below that mention them describe the earlier state.
+
 **Store** says where the route reads and writes today:
 - **Sandbox**: Taimoor's in-memory store (`lib/taimoor/store.ts`, saved to `/tmp/taimoor_core_state_v1.json`). Auth is `Bearer taimoor_tok_<userId>` or `x-sandbox-user-id`. With no token it acts as the seeded owner. Errors are `{ error: "text" }`.
 - **Postgres**: Huzaifa's routes (`server/http.ts` `userRoute` / `authRoute`). They need a Supabase JWT plus `X-Workspace-Id`. Errors are `{ error: { code, message, details } }`.

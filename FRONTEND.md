@@ -2,6 +2,8 @@
 
 Snapshot of the frontend in `Hub-to-Hub/Crm` as of commit `59002ff` (2026-11-18).
 
+> **Out of date (2026-11-23):** the sandbox store (`lib/taimoor/store.ts`), the developer workbench (`/dev/workbench`) and the `/system/inspector` and `/rls/verify` routes have been removed. Every route now runs on Postgres with Supabase auth. Sections below that mention them describe the earlier state.
+
 ## Summary
 
 The repo has **no customer-facing CRM UI yet**. The only screen is a **developer workbench**, a single page at `/` titled "Taimoor Core — White-Label CRM Backend & Schema Explorer". Developers use it to try the backend: call API endpoints, test row-level security, create workspaces from templates, and simulate WhatsApp traffic.
